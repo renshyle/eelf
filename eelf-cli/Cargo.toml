@@ -1,0 +1,9 @@
+[package]
+name = "eelf-cli"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+eelf = { path = "../" }
+num-traits = "0.2"
+comfy-table = "7.1"
