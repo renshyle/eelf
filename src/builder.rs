@@ -617,6 +617,7 @@ impl<'data> ElfBuilder<'data> {
         })
     }
 
+    // TODO: decode if this is needed
     fn get_string(&self, index: usize) -> Option<&str> {
         let mut offset = 0;
         for s in &self.strings {
@@ -631,6 +632,7 @@ impl<'data> ElfBuilder<'data> {
     }
 }
 
+/// A section in an ELF file
 #[derive(Debug, Clone)]
 pub struct Section<'a> {
     /// The data the section contains.

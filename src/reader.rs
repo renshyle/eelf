@@ -760,6 +760,7 @@ impl<K, U> ElfValue<K, U> {
 }
 
 impl<K: ToPrimitive> ElfValue<K, u8> {
+    /// Returns the numeric value regardless of if the meaning of the value is known.
     pub fn to_u8(&self) -> u8 {
         match self {
             ElfValue::Known(v) => v.to_u8().unwrap(),
@@ -769,6 +770,7 @@ impl<K: ToPrimitive> ElfValue<K, u8> {
 }
 
 impl<K: ToPrimitive> ElfValue<K, u16> {
+    /// Returns the numeric value regardless of if the meaning of the value is known.
     pub fn to_u16(&self) -> u16 {
         match self {
             ElfValue::Known(v) => v.to_u16().unwrap(),
@@ -778,6 +780,7 @@ impl<K: ToPrimitive> ElfValue<K, u16> {
 }
 
 impl<K: ToPrimitive> ElfValue<K, u32> {
+    /// Returns the numeric value regardless of if the meaning of the value is known.
     pub fn to_u32(&self) -> u32 {
         match self {
             ElfValue::Known(v) => v.to_u32().unwrap(),
