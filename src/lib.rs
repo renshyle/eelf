@@ -1,7 +1,7 @@
 //! eelf is a library for parsing and writing ELF files.
 //!
-//! The ELF parser can read almost any kind of valid ELF file, but the writer is very limited. It can write 32-bit and
-//! 64-bit ELF files, but has only been tested with RISC-V.
+//! The ELF parser can read almost any kind of valid ELF file, but the writer is very limited.
+//! It can write 32-bit and 64-bit ELF files, but has only been tested with RISC-V.
 //!
 //! # Limitations
 //!

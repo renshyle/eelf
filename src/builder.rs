@@ -1,4 +1,7 @@
-//! Very much WIP.
+//! Contains everything required for building ELF files.
+//!
+//! The main type is [`ElfBuilder`], which can be used to construct the ELF file and build it into
+//! bytes.
 
 use std::{borrow::Cow, io::Write};
 

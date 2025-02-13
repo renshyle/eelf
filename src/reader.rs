@@ -1,7 +1,7 @@
 //! Contains all relevant structures for parsing an ELF file.
 //!
-//! The root of the parsing is [`ElfReader`], through which it is possible to access all of the fields in an ELF file.
-//! See `eelf-cli` for a `readelf`-like program.
+//! The root of the parsing is [`ElfReader`], through which it is possible to access all of the
+//! fields in an ELF file. See `eelf-cli` for a `readelf`-like program.
 //!
 //! # Examples
 //!

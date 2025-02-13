@@ -26,8 +26,8 @@ flags! {
         Alloc = 0x02,
         /// The executed as instructions by the processor.
         ExecInstr = 0x04,
-        /// The data may be merged to avoid duplication. The `sh_entsize` field states the size of each entry, unless
-        /// the section is a string table.
+        /// The data may be merged to avoid duplication. The `sh_entsize` field states the size of
+        /// each entry, unless the section is a string table.
         Merge = 0x10,
         /// The data is a string table, an array of null-terminated strings.
         Strings = 0x20,
@@ -71,7 +71,8 @@ pub enum ElfKind {
     Core,
 }
 
-/// Represents the endianness of a system, i.e. the order in which order bytes of an integer are stored.
+/// Represents the endianness of a system, i.e. the order in which order bytes of an integer are
+/// stored.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Endianness {
     /// Little endian. Least significant byte is stored first.
@@ -637,7 +638,8 @@ pub enum MachineKind {
     Alpha = 0x9026,
 }
 
-/// A map of machine IDs to human-readable names. A machine ID is the numerical value of a [`MachineKind`] variant.
+/// A map of machine IDs to human-readable names. A machine ID is the numerical value of a
+/// [`MachineKind`] variant.
 ///
 /// # Examples
 ///
