@@ -64,6 +64,7 @@ impl<'data> ElfBuilder<'data> {
                 vaddr: 0,
                 entsize: 0,
                 alignment: 0,
+                is_segment: false,
             }],
             strings: vec![String::new()],
             symbols: vec![Symbol {
@@ -127,6 +128,7 @@ impl<'data> ElfBuilder<'data> {
             entsize: if builder.is_64bit { 24 } else { 16 },
             alignment: 0,
             info: builder.symbols.len().try_into().unwrap(),
+            is_segment: false,
         });
 
         if !builder.is_64bit {
@@ -163,6 +165,7 @@ impl<'data> ElfBuilder<'data> {
                         entsize: if builder.is_64bit { 24 } else { 12 },
                         alignment: 0,
                         info: index.try_into().unwrap(),
+                        is_segment: false,
                     });
                 });
         }
@@ -185,6 +188,7 @@ impl<'data> ElfBuilder<'data> {
             info: 0,
             entsize: 0,
             alignment: 0,
+            is_segment: false,
         });
 
         if builder.is_64bit {
@@ -615,9 +619,7 @@ impl<'data> ElfBuilder<'data> {
     }
 
     fn segments(&self) -> impl Iterator<Item = &Section> {
-        self.sections.iter().filter(|section| {
-            self.kind == ElfKind::Executable && section.flags.contains(SectionFlag::Alloc)
-        })
+        self.sections.iter().filter(|section| section.is_segment)
     }
 }
 
@@ -640,6 +642,8 @@ pub struct Section<'a> {
     pub entsize: u64,
     /// The required alignment of the virtual address
     pub alignment: u64,
+    /// Determines whether the section is added to the program table to be loaded during execution.
+    pub is_segment: bool,
 }
 
 /// A table containing the relocations for a section
