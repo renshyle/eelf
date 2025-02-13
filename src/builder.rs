@@ -616,20 +616,6 @@ impl<'data> ElfBuilder<'data> {
             self.kind == ElfKind::Executable && section.flags.contains(SectionFlag::Alloc)
         })
     }
-
-    // TODO: decode if this is needed
-    fn get_string(&self, index: usize) -> Option<&str> {
-        let mut offset = 0;
-        for s in &self.strings {
-            if offset == index {
-                return Some(s);
-            }
-
-            offset += s.len() + 1; // 1 for the null byte
-        }
-
-        None
-    }
 }
 
 /// A section in an ELF file
