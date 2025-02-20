@@ -301,93 +301,81 @@ impl<'data> ElfBuilder<'data> {
     }
 
     fn build_elf32_phdrs<W: Write>(&mut self, mut target: W) -> std::io::Result<()> {
-        if self.kind == ElfKind::Executable {
-            let endianness = self.endianness;
+        let endianness = self.endianness;
 
-            let init_offset = u32::from(ELF32_HEADER_SIZE)
-                + u32::from(ELF32_PROGRAM_HEADER_SIZE)
-                    * u32::try_from(self.segments().count()).unwrap();
-            let mut sections = self
-                .sections
-                .iter()
-                .scan(init_offset, |state, section| {
-                    let offset = *state;
-                    *state += u32::try_from(section.data.len()).unwrap();
-                    Some((offset, section))
-                })
-                .collect::<Vec<_>>(); // create a Vec of (offset, section)
-            sections.sort_by(|a, b| a.1.vaddr.cmp(&b.1.vaddr)); // sort by address
-            let segments = sections
-                .iter()
-                .filter(|(_, section)| section.flags.contains(SectionFlag::Alloc));
+        let init_offset = u32::from(ELF32_HEADER_SIZE)
+            + u32::from(ELF32_PROGRAM_HEADER_SIZE)
+                * u32::try_from(self.segments().count()).unwrap();
+        let mut sections = self
+            .sections
+            .iter()
+            .scan(init_offset, |state, section| {
+                let offset = *state;
+                *state += u32::try_from(section.data.len()).unwrap();
+                Some((offset, section))
+            })
+            .collect::<Vec<_>>(); // create a Vec of (offset, section)
+        sections.sort_by(|a, b| a.1.vaddr.cmp(&b.1.vaddr)); // sort by address
+        let segments = sections.iter().filter(|(_, section)| section.is_segment);
 
-            for (offset, section) in segments {
-                target.write_all(&endianness.u32_to_bytes(1))?; // type LOAD
-                target.write_all(&endianness.u32_to_bytes(*offset))?;
-                target.write_all(&endianness.u32_to_bytes(section.vaddr.try_into().unwrap()))?;
-                target.write_all(&[0, 0, 0, 0])?; // physical address 0, unused
-                target.write_all(
-                    &endianness.u32_to_bytes(u32::try_from(section.data.len()).unwrap()),
-                )?; // filesz
-                target.write_all(
-                    &endianness.u32_to_bytes(u32::try_from(section.data.len()).unwrap()),
-                )?; // memsz
-                let segment_flags = SegmentFlag::Read
-                    | section
-                        .flags
-                        .into_iter()
-                        .filter_map(Option::<SegmentFlag>::from)
-                        .fold(FlagSet::from(None), |a: FlagSet<SegmentFlag>, b| a | b);
-                target.write_all(&endianness.u32_to_bytes(segment_flags.bits()))?;
-                target.write_all(&[0, 0, 0, 0])?; // align 0, unused because a specific address is specified
-            }
+        for (offset, section) in segments {
+            target.write_all(&endianness.u32_to_bytes(1))?; // type LOAD
+            target.write_all(&endianness.u32_to_bytes(*offset))?;
+            target.write_all(&endianness.u32_to_bytes(section.vaddr.try_into().unwrap()))?;
+            target.write_all(&[0, 0, 0, 0])?; // physical address 0, unused
+            target
+                .write_all(&endianness.u32_to_bytes(u32::try_from(section.data.len()).unwrap()))?; // filesz
+            target
+                .write_all(&endianness.u32_to_bytes(u32::try_from(section.data.len()).unwrap()))?; // memsz
+            let segment_flags = SegmentFlag::Read
+                | section
+                    .flags
+                    .into_iter()
+                    .filter_map(Option::<SegmentFlag>::from)
+                    .fold(FlagSet::from(None), |a: FlagSet<SegmentFlag>, b| a | b);
+            target.write_all(&endianness.u32_to_bytes(segment_flags.bits()))?;
+            target.write_all(&[0, 0, 0, 0])?; // align 0, unused because a specific address is specified
         }
 
         Ok(())
     }
 
     fn build_elf64_phdrs<W: Write>(&mut self, mut target: W) -> std::io::Result<()> {
-        if self.kind == ElfKind::Executable {
-            let endianness = self.endianness;
+        let endianness = self.endianness;
 
-            let init_offset = u64::from(ELF64_HEADER_SIZE)
-                + u64::from(ELF64_PROGRAM_HEADER_SIZE)
-                    * u64::try_from(self.segments().count()).unwrap();
-            let mut sections = self
-                .sections
-                .iter()
-                .scan(init_offset, |state, section| {
-                    let offset = *state;
-                    *state += u64::try_from(section.data.len()).unwrap();
-                    Some((offset, section))
-                })
-                .collect::<Vec<_>>(); // create a Vec of (offset, section)
-            sections.sort_by(|a, b| a.1.vaddr.cmp(&b.1.vaddr)); // sort by address
-            let segments = sections
-                .iter()
-                .filter(|(_, section)| section.flags.contains(SectionFlag::Alloc));
+        let init_offset = u64::from(ELF64_HEADER_SIZE)
+            + u64::from(ELF64_PROGRAM_HEADER_SIZE)
+                * u64::try_from(self.segments().count()).unwrap();
+        let mut sections = self
+            .sections
+            .iter()
+            .scan(init_offset, |state, section| {
+                let offset = *state;
+                *state += u64::try_from(section.data.len()).unwrap();
+                Some((offset, section))
+            })
+            .collect::<Vec<_>>(); // create a Vec of (offset, section)
+        sections.sort_by(|a, b| a.1.vaddr.cmp(&b.1.vaddr)); // sort by address
+        let segments = sections.iter().filter(|(_, section)| section.is_segment);
 
-            for (offset, section) in segments {
-                target.write_all(&endianness.u32_to_bytes(1))?; // type LOAD
-                let segment_flags = SegmentFlag::Read
-                    | section
-                        .flags
-                        .into_iter()
-                        .filter_map(Option::<SegmentFlag>::from)
-                        .fold(FlagSet::from(None), |a: FlagSet<SegmentFlag>, b| a | b);
-                target.write_all(&endianness.u32_to_bytes(segment_flags.bits()))?;
+        for (offset, section) in segments {
+            target.write_all(&endianness.u32_to_bytes(1))?; // type LOAD
+            let segment_flags = SegmentFlag::Read
+                | section
+                    .flags
+                    .into_iter()
+                    .filter_map(Option::<SegmentFlag>::from)
+                    .fold(FlagSet::from(None), |a: FlagSet<SegmentFlag>, b| a | b);
+            target.write_all(&endianness.u32_to_bytes(segment_flags.bits()))?;
 
-                target.write_all(&endianness.u64_to_bytes(*offset))?;
-                target.write_all(&endianness.u64_to_bytes(section.vaddr))?;
-                target.write_all(&[0, 0, 0, 0, 0, 0, 0, 0])?; // TODO: physical address 0
-                target.write_all(
-                    &endianness.u64_to_bytes(u64::try_from(section.data.len()).unwrap()),
-                )?; // filesz
-                target.write_all(
-                    &endianness.u64_to_bytes(u64::try_from(section.data.len()).unwrap()),
-                )?; // memsz
-                target.write_all(&[0, 0, 0, 0, 0, 0, 0, 0])?; // TODO: align 0
-            }
+            target.write_all(&endianness.u64_to_bytes(*offset))?;
+            target.write_all(&endianness.u64_to_bytes(section.vaddr))?;
+            target.write_all(&[0, 0, 0, 0, 0, 0, 0, 0])?; // TODO: physical address 0
+            target
+                .write_all(&endianness.u64_to_bytes(u64::try_from(section.data.len()).unwrap()))?; // filesz
+            target
+                .write_all(&endianness.u64_to_bytes(u64::try_from(section.data.len()).unwrap()))?; // memsz
+            target.write_all(&[0, 0, 0, 0, 0, 0, 0, 0])?; // TODO: align 0
         }
 
         Ok(())
