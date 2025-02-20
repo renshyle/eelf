@@ -38,7 +38,7 @@ pub struct ElfBuilder<'data> {
     sections: Vec<Section<'data>>,
     strings: Vec<String>,
     symbols: Vec<Symbol>,
-    relocations: Vec<RelaTable>,
+    relocations: Vec<RelocationTable>,
     entrypoint: u64,
     kind: ElfKind,
     machine: MachineKind,
@@ -131,44 +131,46 @@ impl<'data> ElfBuilder<'data> {
             is_segment: false,
         });
 
-        if !builder.is_64bit {
-            let mut relocation_sections = Vec::new();
+        let mut relocation_sections = Vec::new();
 
-            for table in &builder.relocations {
-                let mut relocation_table = Vec::new();
+        for table in &builder.relocations {
+            match table {
+                RelocationTable::Rela(table) => {
+                    let relocation_table = table.to_bytes(endianness, builder.is_64bit);
 
-                for relocation in &table.relocations {
-                    relocation_table
-                        .extend_from_slice(&endianness.u32_to_bytes(relocation.offset as u32));
-                    relocation_table
-                        .extend_from_slice(&endianness.u32_to_bytes(relocation.info as u32));
-                    relocation_table
-                        .extend_from_slice(&endianness.u32_to_bytes(relocation.addend as u32));
+                    relocation_sections.push((
+                        table.target_section,
+                        table.name,
+                        Cow::Owned(relocation_table),
+                    ));
                 }
+                RelocationTable::Rel(table) => {
+                    let relocation_table = table.to_bytes(endianness, builder.is_64bit);
 
-                relocation_sections.push((
-                    table.target_section,
-                    table.name,
-                    Cow::Owned(relocation_table),
-                ));
+                    relocation_sections.push((
+                        table.target_section,
+                        table.name,
+                        Cow::Owned(relocation_table),
+                    ));
+                }
             }
-
-            relocation_sections
-                .into_iter()
-                .for_each(|(index, name, data)| {
-                    builder.add_section(Section {
-                        name,
-                        data,
-                        kind: SectionKind::Rela,
-                        flags: Default::default(),
-                        vaddr: 0,
-                        entsize: if builder.is_64bit { 24 } else { 12 },
-                        alignment: 0,
-                        info: index.try_into().unwrap(),
-                        is_segment: false,
-                    });
-                });
         }
+
+        relocation_sections
+            .into_iter()
+            .for_each(|(index, name, data)| {
+                builder.add_section(Section {
+                    name,
+                    data,
+                    kind: SectionKind::Rela,
+                    flags: Default::default(),
+                    vaddr: 0,
+                    entsize: if builder.is_64bit { 24 } else { 12 },
+                    alignment: 0,
+                    info: index.try_into().unwrap(),
+                    is_segment: false,
+                });
+            });
 
         builder.add_string(".strtab"); // need to add the string before building the string table bytes
 
@@ -547,7 +549,8 @@ impl<'data> ElfBuilder<'data> {
         self.symbols.len() - 1
     }
 
-    /// Finds the index of a section in the section table by index. If it doesn't exist, [`None`] is returned.
+    /// Finds the index of a section in the section table by index. If it doesn't exist, [`None`]
+    /// is returned.
     pub fn find_section(&self, name: &str) -> Option<usize> {
         let name_index = self.find_string(name)?;
 
@@ -556,33 +559,44 @@ impl<'data> ElfBuilder<'data> {
             .position(|section| section.name == name_index)
     }
 
-    /// Adds a Rela relocation entry to a section's relocation table. The section is referred to by its index in the
-    /// section table.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the section does not already have a relocation table.
-    pub fn add_relocation(&mut self, section: usize, relocation: RelaEntry) {
-        let relocations = self
-            .relocations
-            .iter_mut()
-            .find(|table| table.target_section == section)
-            .unwrap();
-        relocations.relocations.push(relocation);
-    }
-
-    /// Adds a Rela-type relocation table to a section.
-    pub fn add_relocation_table(&mut self, name: impl Into<String> + AsRef<str>, section: usize) {
+    /// Creates a new Rel-type relocation table. The table is not added; it must be added with
+    /// [`ElfBuilder::add_relocation_table`]
+    pub fn create_rel_table(
+        &mut self,
+        name: impl Into<String> + AsRef<str>,
+        section: usize,
+    ) -> RelTable {
         let name = self.add_string(name);
 
-        self.relocations.push(RelaTable {
+        RelTable {
             name,
             target_section: section,
             relocations: Vec::new(),
-        })
+        }
     }
 
-    /// Finds the indxe of a string in the string table. If it dosen't exist, [`None`] is returned.
+    /// Creates a new Rela-type relocation table. The table is not added; it must be added with
+    /// [`ElfBuilder::add_relocation_table`]
+    pub fn create_rela_table(
+        &mut self,
+        name: impl Into<String> + AsRef<str>,
+        section: usize,
+    ) -> RelaTable {
+        let name = self.add_string(name);
+
+        RelaTable {
+            name,
+            target_section: section,
+            relocations: Vec::new(),
+        }
+    }
+
+    /// Adds a relocation table to a section.
+    pub fn add_relocation_table(&mut self, table: RelocationTable) {
+        self.relocations.push(table);
+    }
+
+    /// Finds the index of a string in the string table. If it doesn't exist, [`None`] is returned.
     pub fn find_string(&self, string: &str) -> Option<usize> {
         let mut offset = 0;
         for s in &self.strings {
@@ -642,11 +656,20 @@ pub struct Section<'a> {
     pub entsize: u64,
     /// The required alignment of the virtual address
     pub alignment: u64,
-    /// Determines whether the section is added to the program table to be loaded during execution.
+    /// Determines whether the section is added to the program table to be loaded during execution
     pub is_segment: bool,
 }
 
-/// A table containing the relocations for a section
+/// A table containing relocations of a specific type of a section
+#[derive(Debug, Clone)]
+pub enum RelocationTable {
+    /// Rel-type relocation table
+    Rel(RelTable),
+    /// Rela-type relocation table
+    Rela(RelaTable),
+}
+
+/// A table containing the Rela-type relocations for a section
 #[derive(Debug, Clone)]
 pub struct RelaTable {
     name: usize,
@@ -658,6 +681,75 @@ impl RelaTable {
     /// Adds a relocation to the relocation table.
     pub fn add(&mut self, relocation: RelaEntry) {
         self.relocations.push(relocation);
+    }
+
+    /// # Panics
+    ///
+    /// Panics, if `is_64bit` == false and one of the relocation entries does not fit in 32 bits.
+    fn to_bytes(&self, endianness: Endianness, is_64bit: bool) -> Vec<u8> {
+        let mut relocation_table = Vec::new();
+
+        if is_64bit {
+            for relocation in &self.relocations {
+                relocation_table.extend_from_slice(&endianness.u64_to_bytes(relocation.offset));
+                relocation_table.extend_from_slice(&endianness.u64_to_bytes(relocation.info));
+                relocation_table.extend_from_slice(&endianness.u64_to_bytes(relocation.addend));
+            }
+        } else {
+            for relocation in &self.relocations {
+                relocation_table.extend_from_slice(
+                    &endianness.u32_to_bytes(relocation.offset.try_into().unwrap()),
+                );
+                relocation_table.extend_from_slice(
+                    &endianness.u32_to_bytes(relocation.info.try_into().unwrap()),
+                );
+                relocation_table.extend_from_slice(
+                    &endianness.u32_to_bytes(relocation.addend.try_into().unwrap()),
+                );
+            }
+        }
+
+        return relocation_table;
+    }
+}
+
+/// A table containing the Rel-type relocations for a section
+#[derive(Debug, Clone)]
+pub struct RelTable {
+    name: usize,
+    target_section: usize,
+    relocations: Vec<RelEntry>,
+}
+
+impl RelTable {
+    /// Adds a relocation to the relocation table.
+    pub fn add(&mut self, relocation: RelEntry) {
+        self.relocations.push(relocation);
+    }
+
+    /// # Panics
+    ///
+    /// Panics, if is_64bit == false and one of the relocation entries does not fit in 32 bits.
+    fn to_bytes(&self, endianness: Endianness, is_64bit: bool) -> Vec<u8> {
+        let mut relocation_table = Vec::new();
+
+        if is_64bit {
+            for relocation in &self.relocations {
+                relocation_table.extend_from_slice(&endianness.u64_to_bytes(relocation.offset));
+                relocation_table.extend_from_slice(&endianness.u64_to_bytes(relocation.info));
+            }
+        } else {
+            for relocation in &self.relocations {
+                relocation_table.extend_from_slice(
+                    &endianness.u32_to_bytes(relocation.offset.try_into().unwrap()),
+                );
+                relocation_table.extend_from_slice(
+                    &endianness.u32_to_bytes(relocation.info.try_into().unwrap()),
+                );
+            }
+        }
+
+        return relocation_table;
     }
 }
 
@@ -671,13 +763,22 @@ struct Symbol {
     section: u16,
 }
 
-/// An `Elf32_Rela`-type relocation entry
+/// An `Elf_Rela`-type relocation entry
 #[derive(Debug, Clone)]
 pub struct RelaEntry {
-    /// The offset which the relocation should be applied at.
+    /// The offset which the relocation should be applied at
     pub offset: u64,
-    /// Symbol table index and type of relocation.
+    /// Symbol table index and type of relocation
     pub info: u64,
-    /// Constant addend to be used in the calculation.
+    /// Constant addend to be used in the calculation
     pub addend: u64,
+}
+
+/// An `Elf_Rel`-type relocation entry
+#[derive(Debug, Clone)]
+pub struct RelEntry {
+    /// The offset which the relocation should be applied at
+    pub offset: u64,
+    /// Symbol table index and type of relocation
+    pub info: u64,
 }
