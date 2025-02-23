@@ -332,13 +332,13 @@ impl<'data> Strings<'data> {
     /// Reads a UTF-8 string from the string table using the index specified. If a zero-terminated string of bytes at
     /// the specified address could not be found, `None` is returned. If one was found but could not be parsed as UTF-8,
     /// `Some(Err())` is returned.
-    pub fn get_str(&self, index: u32) -> Option<Result<&'data str, Utf8Error>> {
+    pub fn get_str(&self, index: u64) -> Option<Result<&'data str, Utf8Error>> {
         self.get_cstr(index).map(CStr::to_str)
     }
 
     /// Reads a [`CStr`] from the string table using the index specified. If a zero-terminated string of bytes at the
     /// specified address could not be found, `None` is returned. The string must not be valid UTF-8.
-    pub fn get_cstr(&self, index: u32) -> Option<&'data CStr> {
+    pub fn get_cstr(&self, index: u64) -> Option<&'data CStr> {
         let bytes = self.data.get(usize::try_from(index).unwrap()..)?;
 
         CStr::from_bytes_until_nul(bytes).ok()
