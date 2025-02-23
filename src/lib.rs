@@ -17,6 +17,8 @@ pub mod builder;
 mod consts;
 pub mod reader;
 
+pub use flagset;
+
 #[doc(inline)]
 pub use builder::ElfBuilder;
 pub use consts::{

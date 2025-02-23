@@ -5,7 +5,6 @@
 
 use std::{borrow::Cow, io::Write};
 
-use flagset::FlagSet;
 use num_traits::ToPrimitive;
 
 use crate::{
@@ -13,6 +12,7 @@ use crate::{
         SectionKind, SymbolKind, ELF64_HEADER_SIZE, ELF64_PROGRAM_HEADER_SIZE,
         ELF64_SECTION_HEADER_SIZE, ELF_MAGIC,
     },
+    flagset::FlagSet,
     Endianness, MachineKind,
 };
 

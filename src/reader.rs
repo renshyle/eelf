@@ -19,7 +19,6 @@
 use core::str;
 use std::{ffi::CStr, str::Utf8Error};
 
-use flagset::FlagSet;
 use num_traits::{FromPrimitive, ToPrimitive};
 use thiserror::Error;
 
@@ -29,6 +28,7 @@ use crate::{
         EI_VERSION, ELF32_SECTION_HEADER_SIZE, ELF64_HEADER_SIZE, ELF64_PROGRAM_HEADER_SIZE,
         ELF64_SECTION_HEADER_SIZE,
     },
+    flagset::FlagSet,
     Endianness, SectionFlag,
 };
 
