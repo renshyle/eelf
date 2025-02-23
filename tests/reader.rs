@@ -158,7 +158,7 @@ fn hello_world() {
         ),
     ];
 
-    for (i, section) in reader.sections().unwrap().into_iter().take(100).enumerate() {
+    for (i, section) in reader.sections().unwrap().into_iter().enumerate() {
         assert_eq!(section.name(), expected_sections[i].0);
         assert_eq!(section.kind(), expected_sections[i].1);
         assert_eq!(section.addr(), expected_sections[i].2);
