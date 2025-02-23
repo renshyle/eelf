@@ -12,6 +12,9 @@
 //! println!("File target architecture: {:?}", header.machine());
 //! # Ok::<(), eelf::ParseError>(())
 //! ```
+//!
+//! Also check out [eelf-cli](https://github.com/renshyle/eelf/tree/main/eelf-cli) for a
+//! readelf-like program using eelf.
 
 use core::str;
 use std::{ffi::CStr, str::Utf8Error};
