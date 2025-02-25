@@ -697,7 +697,7 @@ impl RelaTable {
             }
         }
 
-        return relocation_table;
+        relocation_table
     }
 }
 
@@ -737,7 +737,7 @@ impl RelTable {
             }
         }
 
-        return relocation_table;
+        relocation_table
     }
 }
 
