@@ -13,7 +13,7 @@ use crate::{
         ELF64_SECTION_HEADER_SIZE, ELF_MAGIC,
     },
     flagset::FlagSet,
-    Endianness, MachineKind,
+    Endianness, MachineKind, SegmentKind,
 };
 
 use super::{
@@ -39,6 +39,7 @@ pub struct ElfBuilder<'data> {
     strings: Vec<String>,
     symbols: Vec<Symbol>,
     relocations: Vec<RelocationTable>,
+    segments: Vec<Segment>,
     entrypoint: u64,
     kind: ElfKind,
     machine: MachineKind,
@@ -64,7 +65,6 @@ impl<'data> ElfBuilder<'data> {
                 vaddr: 0,
                 entsize: 0,
                 alignment: 0,
-                is_segment: false,
             }],
             strings: vec![String::new()],
             symbols: vec![Symbol {
@@ -75,6 +75,7 @@ impl<'data> ElfBuilder<'data> {
                 section: 0,
             }],
             relocations: Vec::new(),
+            segments: Vec::new(),
             entrypoint: 0,
             kind,
             machine,
@@ -128,7 +129,6 @@ impl<'data> ElfBuilder<'data> {
             entsize: if builder.is_64bit { 24 } else { 16 },
             alignment: 0,
             info: builder.symbols.len().try_into().unwrap(),
-            is_segment: false,
         });
 
         let mut relocation_sections = Vec::new();
@@ -168,7 +168,6 @@ impl<'data> ElfBuilder<'data> {
                     entsize: if builder.is_64bit { 24 } else { 12 },
                     alignment: 0,
                     info: index.try_into().unwrap(),
-                    is_segment: false,
                 });
             });
 
@@ -190,7 +189,6 @@ impl<'data> ElfBuilder<'data> {
             info: 0,
             entsize: 0,
             alignment: 0,
-            is_segment: false,
         });
 
         if builder.is_64bit {
@@ -225,7 +223,7 @@ impl<'data> ElfBuilder<'data> {
         target.write_all(&endianness.u16_to_bytes(self.machine.to_u16().unwrap()))?;
         target.write_all(&endianness.u32_to_bytes(1))?; // elf version 1
         target.write_all(&endianness.u32_to_bytes(self.entrypoint as u32))?;
-        target.write_all(&if self.segments().next().is_none() {
+        target.write_all(&if self.segments.is_empty() {
             [0, 0, 0, 0]
         } else {
             endianness.u32_to_bytes(ELF32_HEADER_SIZE.into())
@@ -238,7 +236,7 @@ impl<'data> ElfBuilder<'data> {
                         .map(|section| section.data.len())
                         .sum::<usize>()
                         + usize::from(ELF32_HEADER_SIZE)
-                        + usize::from(ELF32_PROGRAM_HEADER_SIZE) * self.segments().count(),
+                        + usize::from(ELF32_PROGRAM_HEADER_SIZE) * self.segments.len(),
                 )
                 .unwrap(),
             ),
@@ -246,7 +244,7 @@ impl<'data> ElfBuilder<'data> {
         target.write_all(&[0, 0, 0, 0])?; // empty flags
         target.write_all(&endianness.u16_to_bytes(ELF32_HEADER_SIZE))?;
         target.write_all(&endianness.u16_to_bytes(ELF32_PROGRAM_HEADER_SIZE))?; // program header entry size
-        target.write_all(&endianness.u16_to_bytes(self.segments().count().try_into().unwrap()))?; // program header entry count
+        target.write_all(&endianness.u16_to_bytes(self.segments.len().try_into().unwrap()))?; // program header entry count
         target.write_all(&endianness.u16_to_bytes(ELF32_SECTION_HEADER_SIZE))?;
         target.write_all(&endianness.u16_to_bytes(self.sections.len().try_into().unwrap()))?; // section header count
         target.write_all(&endianness.u16_to_bytes(u16::try_from(string_table_index).unwrap()))?; // string table index
@@ -271,7 +269,7 @@ impl<'data> ElfBuilder<'data> {
         target.write_all(&endianness.u16_to_bytes(self.machine.to_u16().unwrap()))?;
         target.write_all(&endianness.u32_to_bytes(1))?; // elf version 1
         target.write_all(&endianness.u64_to_bytes(self.entrypoint))?;
-        target.write_all(&if self.segments().next().is_none() {
+        target.write_all(&if self.segments.is_empty() {
             [0, 0, 0, 0, 0, 0, 0, 0]
         } else {
             endianness.u64_to_bytes(ELF64_HEADER_SIZE.into())
@@ -284,7 +282,7 @@ impl<'data> ElfBuilder<'data> {
                         .map(|section| section.data.len())
                         .sum::<usize>()
                         + usize::from(ELF64_HEADER_SIZE)
-                        + usize::from(ELF64_PROGRAM_HEADER_SIZE) * self.segments().count(),
+                        + usize::from(ELF64_PROGRAM_HEADER_SIZE) * self.segments.len(),
                 )
                 .unwrap(),
             ),
@@ -292,7 +290,7 @@ impl<'data> ElfBuilder<'data> {
         target.write_all(&[0, 0, 0, 0])?; // empty flags
         target.write_all(&endianness.u16_to_bytes(ELF64_HEADER_SIZE))?;
         target.write_all(&endianness.u16_to_bytes(ELF64_PROGRAM_HEADER_SIZE))?; // program header entry size
-        target.write_all(&endianness.u16_to_bytes(self.segments().count().try_into().unwrap()))?; // program header entry count
+        target.write_all(&endianness.u16_to_bytes(self.segments.len().try_into().unwrap()))?; // program header entry count
         target.write_all(&endianness.u16_to_bytes(ELF64_SECTION_HEADER_SIZE))?;
         target.write_all(&endianness.u16_to_bytes(self.sections.len().try_into().unwrap()))?; // section header count
         target.write_all(&endianness.u16_to_bytes(u16::try_from(string_table_index).unwrap()))?; // string table index
@@ -304,9 +302,8 @@ impl<'data> ElfBuilder<'data> {
         let endianness = self.endianness;
 
         let init_offset = u32::from(ELF32_HEADER_SIZE)
-            + u32::from(ELF32_PROGRAM_HEADER_SIZE)
-                * u32::try_from(self.segments().count()).unwrap();
-        let mut sections = self
+            + u32::from(ELF32_PROGRAM_HEADER_SIZE) * u32::try_from(self.segments.len()).unwrap();
+        let sections = self
             .sections
             .iter()
             .scan(init_offset, |state, section| {
@@ -315,26 +312,18 @@ impl<'data> ElfBuilder<'data> {
                 Some((offset, section))
             })
             .collect::<Vec<_>>(); // create a Vec of (offset, section)
-        sections.sort_by(|a, b| a.1.vaddr.cmp(&b.1.vaddr)); // sort by address
-        let segments = sections.iter().filter(|(_, section)| section.is_segment);
+        let mut segments = self.segments.iter().collect::<Vec<_>>();
+        segments.sort_by(|a, b| a.vaddr.cmp(&b.vaddr));
 
-        for (offset, section) in segments {
-            target.write_all(&endianness.u32_to_bytes(1))?; // type LOAD
-            target.write_all(&endianness.u32_to_bytes(*offset))?;
-            target.write_all(&endianness.u32_to_bytes(section.vaddr.try_into().unwrap()))?;
-            target.write_all(&[0, 0, 0, 0])?; // physical address 0, unused
-            target
-                .write_all(&endianness.u32_to_bytes(u32::try_from(section.data.len()).unwrap()))?; // filesz
-            target
-                .write_all(&endianness.u32_to_bytes(u32::try_from(section.data.len()).unwrap()))?; // memsz
-            let segment_flags = SegmentFlag::Read
-                | section
-                    .flags
-                    .into_iter()
-                    .filter_map(Option::<SegmentFlag>::from)
-                    .fold(FlagSet::from(None), |a: FlagSet<SegmentFlag>, b| a | b);
-            target.write_all(&endianness.u32_to_bytes(segment_flags.bits()))?;
-            target.write_all(&[0, 0, 0, 0])?; // align 0, unused because a specific address is specified
+        for segment in &segments {
+            target.write_all(&endianness.u32_to_bytes(segment.kind.to_u32().unwrap()))?;
+            target.write_all(&endianness.u32_to_bytes(sections[segment.section].0))?;
+            target.write_all(&endianness.u32_to_bytes(segment.vaddr.try_into().unwrap()))?;
+            target.write_all(&endianness.u32_to_bytes(segment.paddr.try_into().unwrap()))?;
+            target.write_all(&endianness.u32_to_bytes(segment.filesz.try_into().unwrap()))?;
+            target.write_all(&endianness.u32_to_bytes(segment.memsz.try_into().unwrap()))?;
+            target.write_all(&endianness.u32_to_bytes(segment.flags.bits()))?;
+            target.write_all(&endianness.u32_to_bytes(segment.align.try_into().unwrap()))?;
         }
 
         Ok(())
@@ -344,9 +333,8 @@ impl<'data> ElfBuilder<'data> {
         let endianness = self.endianness;
 
         let init_offset = u64::from(ELF64_HEADER_SIZE)
-            + u64::from(ELF64_PROGRAM_HEADER_SIZE)
-                * u64::try_from(self.segments().count()).unwrap();
-        let mut sections = self
+            + u64::from(ELF64_PROGRAM_HEADER_SIZE) * u64::try_from(self.segments.len()).unwrap();
+        let sections = self
             .sections
             .iter()
             .scan(init_offset, |state, section| {
@@ -355,27 +343,19 @@ impl<'data> ElfBuilder<'data> {
                 Some((offset, section))
             })
             .collect::<Vec<_>>(); // create a Vec of (offset, section)
-        sections.sort_by(|a, b| a.1.vaddr.cmp(&b.1.vaddr)); // sort by address
-        let segments = sections.iter().filter(|(_, section)| section.is_segment);
+        let mut segments = self.segments.iter().collect::<Vec<_>>();
+        segments.sort_by(|a, b| a.vaddr.cmp(&b.vaddr));
 
-        for (offset, section) in segments {
-            target.write_all(&endianness.u32_to_bytes(1))?; // type LOAD
-            let segment_flags = SegmentFlag::Read
-                | section
-                    .flags
-                    .into_iter()
-                    .filter_map(Option::<SegmentFlag>::from)
-                    .fold(FlagSet::from(None), |a: FlagSet<SegmentFlag>, b| a | b);
-            target.write_all(&endianness.u32_to_bytes(segment_flags.bits()))?;
+        for segment in &segments {
+            target.write_all(&endianness.u32_to_bytes(segment.kind.to_u32().unwrap()))?;
+            target.write_all(&endianness.u32_to_bytes(segment.flags.bits()))?;
 
-            target.write_all(&endianness.u64_to_bytes(*offset))?;
-            target.write_all(&endianness.u64_to_bytes(section.vaddr))?;
-            target.write_all(&[0, 0, 0, 0, 0, 0, 0, 0])?; // TODO: physical address 0
-            target
-                .write_all(&endianness.u64_to_bytes(u64::try_from(section.data.len()).unwrap()))?; // filesz
-            target
-                .write_all(&endianness.u64_to_bytes(u64::try_from(section.data.len()).unwrap()))?; // memsz
-            target.write_all(&[0, 0, 0, 0, 0, 0, 0, 0])?; // TODO: align 0
+            target.write_all(&endianness.u64_to_bytes(sections[segment.section].0))?;
+            target.write_all(&endianness.u64_to_bytes(segment.vaddr))?;
+            target.write_all(&endianness.u64_to_bytes(segment.paddr))?;
+            target.write_all(&endianness.u64_to_bytes(segment.filesz))?;
+            target.write_all(&endianness.u64_to_bytes(segment.memsz))?;
+            target.write_all(&endianness.u64_to_bytes(segment.align))?;
         }
 
         Ok(())
@@ -392,8 +372,7 @@ impl<'data> ElfBuilder<'data> {
     fn build_elf32_section_headers<W: Write>(&mut self, mut target: W) -> std::io::Result<()> {
         let endianness = self.endianness;
         let mut offset = u32::from(ELF32_HEADER_SIZE)
-            + u32::from(ELF32_PROGRAM_HEADER_SIZE)
-                * u32::try_from(self.segments().count()).unwrap();
+            + u32::from(ELF32_PROGRAM_HEADER_SIZE) * u32::try_from(self.segments.len()).unwrap();
         for section in &self.sections {
             target.write_all(&endianness.u32_to_bytes(section.name.try_into().unwrap()))?;
             target.write_all(&endianness.u32_to_bytes(section.kind.to_u32().unwrap()))?;
@@ -430,8 +409,7 @@ impl<'data> ElfBuilder<'data> {
     fn build_elf64_section_headers<W: Write>(&mut self, mut target: W) -> std::io::Result<()> {
         let endianness = self.endianness;
         let mut offset = u64::from(ELF64_HEADER_SIZE)
-            + u64::from(ELF64_PROGRAM_HEADER_SIZE)
-                * u64::try_from(self.segments().count()).unwrap();
+            + u64::from(ELF64_PROGRAM_HEADER_SIZE) * u64::try_from(self.segments.len()).unwrap();
         for section in &self.sections {
             target.write_all(&endianness.u32_to_bytes(section.name.try_into().unwrap()))?;
             target.write_all(&endianness.u32_to_bytes(section.kind.to_u32().unwrap()))?;
@@ -484,6 +462,14 @@ impl<'data> ElfBuilder<'data> {
 
         self.sections.push(section);
         self.sections.len() - 1
+    }
+
+    /// Adds a segment entry into the program header. The segment type may not be [`SegmentKind::Phdr`].
+    pub fn add_segment(&mut self, segment: Segment) {
+        assert!(segment.memsz >= segment.filesz);
+        assert!(segment.kind != SegmentKind::Phdr);
+
+        self.segments.push(segment);
     }
 
     /// Adds a string to the string table if it doesn't exist already and returns its index.
@@ -619,10 +605,6 @@ impl<'data> ElfBuilder<'data> {
 
         self.entrypoint = entrypoint;
     }
-
-    fn segments(&self) -> impl Iterator<Item = &Section> {
-        self.sections.iter().filter(|section| section.is_segment)
-    }
 }
 
 /// A section in an ELF file
@@ -644,8 +626,27 @@ pub struct Section<'a> {
     pub entsize: u64,
     /// The required alignment of the virtual address
     pub alignment: u64,
-    /// Determines whether the section is added to the program table to be loaded during execution
-    pub is_segment: bool,
+}
+
+/// A segment in the program header of an ELF file
+#[derive(Debug, Clone)]
+pub struct Segment {
+    /// The index of the section the segment refers to
+    pub section: usize,
+    /// The type of the segment
+    pub kind: SegmentKind,
+    /// The virtual address of the segment
+    pub vaddr: u64,
+    /// The physical address of the segment
+    pub paddr: u64,
+    /// The size of the segment's data stored in the ELF file
+    pub filesz: u64,
+    /// The size of the segment's data in memory
+    pub memsz: u64,
+    /// Segment flags
+    pub flags: FlagSet<SegmentFlag>,
+    /// The required alignment of the virtual address
+    pub align: u64,
 }
 
 /// A table containing relocations of a specific type of a section
