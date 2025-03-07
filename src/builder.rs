@@ -21,6 +21,9 @@ use super::{
     ElfKind, SectionFlag, SegmentFlag,
 };
 
+mod elf32;
+mod elf64;
+
 impl From<SectionFlag> for Option<SegmentFlag> {
     fn from(val: SectionFlag) -> Self {
         match val {
@@ -192,170 +195,15 @@ impl<'data> ElfBuilder<'data> {
         });
 
         if builder.is_64bit {
-            builder.build_elf64_header(&mut target)?;
-            builder.build_elf64_phdrs(&mut target)?;
+            elf64::write_header(&mut builder, &mut target)?;
+            elf64::write_phdrs(&mut builder, &mut target)?;
             builder.write_sections(&mut target)?;
-            builder.build_elf64_section_headers(&mut target)?;
+            elf64::write_section_headers(&mut builder, &mut target)?;
         } else {
-            builder.build_elf32_header(&mut target)?;
-            builder.build_elf32_phdrs(&mut target)?;
+            elf32::write_header(&mut builder, &mut target)?;
+            elf32::write_phdrs(&mut builder, &mut target)?;
             builder.write_sections(&mut target)?;
-            builder.build_elf32_section_headers(&mut target)?;
-        }
-
-        Ok(())
-    }
-
-    fn build_elf32_header<W: Write>(&mut self, mut target: W) -> std::io::Result<()> {
-        let endianness = self.endianness;
-        let string_table_index = self.sections.len() - 1;
-
-        target.write_all(ELF_MAGIC)?;
-        target.write_all(&[1])?; // 32-bit
-        target.write_all(match self.endianness {
-            Endianness::Little => &[1],
-            Endianness::Big => &[2],
-        })?;
-        target.write_all(&[1])?; // elf version 1
-        target.write_all(&[0, 0, 0, 0, 0, 0, 0, 0, 0])?; // padding
-
-        target.write_all(&endianness.u16_to_bytes(self.kind.to_u16().unwrap()))?;
-        target.write_all(&endianness.u16_to_bytes(self.machine.to_u16().unwrap()))?;
-        target.write_all(&endianness.u32_to_bytes(1))?; // elf version 1
-        target.write_all(&endianness.u32_to_bytes(self.entrypoint as u32))?;
-        target.write_all(&if self.segments.is_empty() {
-            [0, 0, 0, 0]
-        } else {
-            endianness.u32_to_bytes(ELF32_HEADER_SIZE.into())
-        })?; // program headers right after the header if there are segments, 0 otherwise
-        target.write_all(
-            &endianness.u32_to_bytes(
-                u32::try_from(
-                    self.sections
-                        .iter()
-                        .map(|section| section.data.len())
-                        .sum::<usize>()
-                        + usize::from(ELF32_HEADER_SIZE)
-                        + usize::from(ELF32_PROGRAM_HEADER_SIZE) * self.segments.len(),
-                )
-                .unwrap(),
-            ),
-        )?; // section header table offset
-        target.write_all(&[0, 0, 0, 0])?; // empty flags
-        target.write_all(&endianness.u16_to_bytes(ELF32_HEADER_SIZE))?;
-        target.write_all(&endianness.u16_to_bytes(ELF32_PROGRAM_HEADER_SIZE))?; // program header entry size
-        target.write_all(&endianness.u16_to_bytes(self.segments.len().try_into().unwrap()))?; // program header entry count
-        target.write_all(&endianness.u16_to_bytes(ELF32_SECTION_HEADER_SIZE))?;
-        target.write_all(&endianness.u16_to_bytes(self.sections.len().try_into().unwrap()))?; // section header count
-        target.write_all(&endianness.u16_to_bytes(u16::try_from(string_table_index).unwrap()))?; // string table index
-
-        Ok(())
-    }
-
-    fn build_elf64_header<W: Write>(&mut self, mut target: W) -> std::io::Result<()> {
-        let endianness = self.endianness;
-        let string_table_index = self.sections.len() - 1;
-
-        target.write_all(ELF_MAGIC)?;
-        target.write_all(&[2])?; // 64-bit
-        target.write_all(match self.endianness {
-            Endianness::Little => &[1],
-            Endianness::Big => &[2],
-        })?;
-        target.write_all(&[1])?; // elf version 1
-        target.write_all(&[0, 0, 0, 0, 0, 0, 0, 0, 0])?; // padding
-
-        target.write_all(&endianness.u16_to_bytes(self.kind.to_u16().unwrap()))?;
-        target.write_all(&endianness.u16_to_bytes(self.machine.to_u16().unwrap()))?;
-        target.write_all(&endianness.u32_to_bytes(1))?; // elf version 1
-        target.write_all(&endianness.u64_to_bytes(self.entrypoint))?;
-        target.write_all(&if self.segments.is_empty() {
-            [0, 0, 0, 0, 0, 0, 0, 0]
-        } else {
-            endianness.u64_to_bytes(ELF64_HEADER_SIZE.into())
-        })?; // program headers right after the header if there are segments, 0 otherwise
-        target.write_all(
-            &endianness.u64_to_bytes(
-                u64::try_from(
-                    self.sections
-                        .iter()
-                        .map(|section| section.data.len())
-                        .sum::<usize>()
-                        + usize::from(ELF64_HEADER_SIZE)
-                        + usize::from(ELF64_PROGRAM_HEADER_SIZE) * self.segments.len(),
-                )
-                .unwrap(),
-            ),
-        )?; // section header table offset
-        target.write_all(&[0, 0, 0, 0])?; // empty flags
-        target.write_all(&endianness.u16_to_bytes(ELF64_HEADER_SIZE))?;
-        target.write_all(&endianness.u16_to_bytes(ELF64_PROGRAM_HEADER_SIZE))?; // program header entry size
-        target.write_all(&endianness.u16_to_bytes(self.segments.len().try_into().unwrap()))?; // program header entry count
-        target.write_all(&endianness.u16_to_bytes(ELF64_SECTION_HEADER_SIZE))?;
-        target.write_all(&endianness.u16_to_bytes(self.sections.len().try_into().unwrap()))?; // section header count
-        target.write_all(&endianness.u16_to_bytes(u16::try_from(string_table_index).unwrap()))?; // string table index
-
-        Ok(())
-    }
-
-    fn build_elf32_phdrs<W: Write>(&mut self, mut target: W) -> std::io::Result<()> {
-        let endianness = self.endianness;
-
-        let init_offset = u32::from(ELF32_HEADER_SIZE)
-            + u32::from(ELF32_PROGRAM_HEADER_SIZE) * u32::try_from(self.segments.len()).unwrap();
-        let sections = self
-            .sections
-            .iter()
-            .scan(init_offset, |state, section| {
-                let offset = *state;
-                *state += u32::try_from(section.data.len()).unwrap();
-                Some((offset, section))
-            })
-            .collect::<Vec<_>>(); // create a Vec of (offset, section)
-        let mut segments = self.segments.iter().collect::<Vec<_>>();
-        segments.sort_by(|a, b| a.vaddr.cmp(&b.vaddr));
-
-        for segment in &segments {
-            target.write_all(&endianness.u32_to_bytes(segment.kind.to_u32().unwrap()))?;
-            target.write_all(&endianness.u32_to_bytes(sections[segment.section].0))?;
-            target.write_all(&endianness.u32_to_bytes(segment.vaddr.try_into().unwrap()))?;
-            target.write_all(&endianness.u32_to_bytes(segment.paddr.try_into().unwrap()))?;
-            target.write_all(&endianness.u32_to_bytes(segment.filesz.try_into().unwrap()))?;
-            target.write_all(&endianness.u32_to_bytes(segment.memsz.try_into().unwrap()))?;
-            target.write_all(&endianness.u32_to_bytes(segment.flags.bits()))?;
-            target.write_all(&endianness.u32_to_bytes(segment.align.try_into().unwrap()))?;
-        }
-
-        Ok(())
-    }
-
-    fn build_elf64_phdrs<W: Write>(&mut self, mut target: W) -> std::io::Result<()> {
-        let endianness = self.endianness;
-
-        let init_offset = u64::from(ELF64_HEADER_SIZE)
-            + u64::from(ELF64_PROGRAM_HEADER_SIZE) * u64::try_from(self.segments.len()).unwrap();
-        let sections = self
-            .sections
-            .iter()
-            .scan(init_offset, |state, section| {
-                let offset = *state;
-                *state += u64::try_from(section.data.len()).unwrap();
-                Some((offset, section))
-            })
-            .collect::<Vec<_>>(); // create a Vec of (offset, section)
-        let mut segments = self.segments.iter().collect::<Vec<_>>();
-        segments.sort_by(|a, b| a.vaddr.cmp(&b.vaddr));
-
-        for segment in &segments {
-            target.write_all(&endianness.u32_to_bytes(segment.kind.to_u32().unwrap()))?;
-            target.write_all(&endianness.u32_to_bytes(segment.flags.bits()))?;
-
-            target.write_all(&endianness.u64_to_bytes(sections[segment.section].0))?;
-            target.write_all(&endianness.u64_to_bytes(segment.vaddr))?;
-            target.write_all(&endianness.u64_to_bytes(segment.paddr))?;
-            target.write_all(&endianness.u64_to_bytes(segment.filesz))?;
-            target.write_all(&endianness.u64_to_bytes(segment.memsz))?;
-            target.write_all(&endianness.u64_to_bytes(segment.align))?;
+            elf32::write_section_headers(&mut builder, &mut target)?;
         }
 
         Ok(())
@@ -364,80 +212,6 @@ impl<'data> ElfBuilder<'data> {
     fn write_sections<W: Write>(&mut self, mut target: W) -> std::io::Result<()> {
         for section in &self.sections {
             target.write_all(&section.data)?;
-        }
-
-        Ok(())
-    }
-
-    fn build_elf32_section_headers<W: Write>(&mut self, mut target: W) -> std::io::Result<()> {
-        let endianness = self.endianness;
-        let mut offset = u32::from(ELF32_HEADER_SIZE)
-            + u32::from(ELF32_PROGRAM_HEADER_SIZE) * u32::try_from(self.segments.len()).unwrap();
-        for section in &self.sections {
-            target.write_all(&endianness.u32_to_bytes(section.name.try_into().unwrap()))?;
-            target.write_all(&endianness.u32_to_bytes(section.kind.to_u32().unwrap()))?;
-            target.write_all(&endianness.u32_to_bytes(section.flags.bits()))?;
-            target.write_all(&endianness.u32_to_bytes(section.vaddr.try_into().unwrap()))?;
-            target.write_all(
-                &endianness.u32_to_bytes(if section.kind == SectionKind::Null {
-                    0
-                } else {
-                    offset
-                }),
-            )?;
-            target.write_all(&endianness.u32_to_bytes(section.data.len().try_into().unwrap()))?;
-
-            let link = match section.kind {
-                SectionKind::SymbolTable => {
-                    u32::try_from(self.find_section(".strtab").unwrap()).unwrap()
-                }
-                SectionKind::Rela => u32::try_from(self.find_section(".symtab").unwrap()).unwrap(),
-                _ => 0,
-            };
-
-            target.write_all(&endianness.u32_to_bytes(link))?;
-            target.write_all(&endianness.u32_to_bytes(section.info))?;
-            target.write_all(&endianness.u32_to_bytes(section.alignment.try_into().unwrap()))?;
-            target.write_all(&endianness.u32_to_bytes(section.entsize.try_into().unwrap()))?;
-
-            offset += u32::try_from(section.data.len()).unwrap();
-        }
-
-        Ok(())
-    }
-
-    fn build_elf64_section_headers<W: Write>(&mut self, mut target: W) -> std::io::Result<()> {
-        let endianness = self.endianness;
-        let mut offset = u64::from(ELF64_HEADER_SIZE)
-            + u64::from(ELF64_PROGRAM_HEADER_SIZE) * u64::try_from(self.segments.len()).unwrap();
-        for section in &self.sections {
-            target.write_all(&endianness.u32_to_bytes(section.name.try_into().unwrap()))?;
-            target.write_all(&endianness.u32_to_bytes(section.kind.to_u32().unwrap()))?;
-            target.write_all(&endianness.u64_to_bytes(section.flags.bits().into()))?;
-            target.write_all(&endianness.u64_to_bytes(section.vaddr))?;
-            target.write_all(
-                &endianness.u64_to_bytes(if section.kind == SectionKind::Null {
-                    0
-                } else {
-                    offset
-                }),
-            )?;
-            target.write_all(&endianness.u64_to_bytes(section.data.len().try_into().unwrap()))?;
-
-            let link = match section.kind {
-                SectionKind::SymbolTable => {
-                    u32::try_from(self.find_section(".strtab").unwrap()).unwrap()
-                }
-                SectionKind::Rela => u32::try_from(self.find_section(".symtab").unwrap()).unwrap(),
-                _ => 0,
-            };
-
-            target.write_all(&endianness.u32_to_bytes(link))?;
-            target.write_all(&endianness.u32_to_bytes(section.info))?;
-            target.write_all(&endianness.u64_to_bytes(section.alignment))?;
-            target.write_all(&endianness.u64_to_bytes(section.entsize))?;
-
-            offset += u64::try_from(section.data.len()).unwrap();
         }
 
         Ok(())
