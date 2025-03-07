@@ -73,6 +73,7 @@ impl<'data> ElfBuilder<'data> {
             symbols: vec![Symbol {
                 name: 0,
                 value: 0,
+                size: 0,
                 global: false,
                 kind: SymbolKind::NoType,
                 section: 0,
@@ -104,7 +105,7 @@ impl<'data> ElfBuilder<'data> {
                 symbol_table.extend_from_slice(&endianness.u16_to_bytes(symbol.section));
 
                 symbol_table.extend_from_slice(&endianness.u64_to_bytes(symbol.value));
-                symbol_table.extend_from_slice(&[0, 0, 0, 0, 0, 0, 0, 0]); // TODO: no size
+                symbol_table.extend_from_slice(&endianness.u64_to_bytes(symbol.size));
             }
         } else {
             for symbol in &builder.symbols {
@@ -112,7 +113,8 @@ impl<'data> ElfBuilder<'data> {
                     .extend_from_slice(&endianness.u32_to_bytes(symbol.name.try_into().unwrap()));
                 symbol_table
                     .extend_from_slice(&endianness.u32_to_bytes(symbol.value.try_into().unwrap()));
-                symbol_table.extend_from_slice(&[0, 0, 0, 0]); // no size
+                symbol_table
+                    .extend_from_slice(&endianness.u32_to_bytes(symbol.size.try_into().unwrap()));
 
                 let info = symbol.kind.to_u8().unwrap() | if symbol.global { 16 } else { 0 };
                 symbol_table.push(info);
@@ -280,11 +282,12 @@ impl<'data> ElfBuilder<'data> {
     ///
     /// # Panics
     ///
-    /// Panics if the value is greater than [`u32::MAX`] and the ELF file is 32-bit.
+    /// Panics if the value or size is greater than [`u32::MAX`] and the ELF file is 32-bit.
     pub fn add_symbol(
         &mut self,
         name: impl Into<String> + AsRef<str>,
         value: u64,
+        size: u64,
         global: bool,
         kind: SymbolKind,
         section: u16,
@@ -293,11 +296,13 @@ impl<'data> ElfBuilder<'data> {
 
         if !self.is_64bit {
             assert!(value <= u32::MAX.into());
+            assert!(size <= u32::MAX.into());
         }
 
         self.symbols.push(Symbol {
             name: name_index,
             value,
+            size,
             global,
             kind,
             section,
@@ -530,6 +535,7 @@ struct Symbol {
     /// An index into the string table
     name: usize,
     value: u64,
+    size: u64,
     global: bool,
     kind: SymbolKind,
     section: u16,
