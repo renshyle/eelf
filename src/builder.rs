@@ -24,17 +24,6 @@ use super::{
 mod elf32;
 mod elf64;
 
-impl From<SectionFlag> for Option<SegmentFlag> {
-    fn from(val: SectionFlag) -> Self {
-        match val {
-            SectionFlag::Write => Some(SegmentFlag::Write),
-            SectionFlag::Alloc => None,
-            SectionFlag::ExecInstr => Some(SegmentFlag::Execute),
-            _ => todo!(),
-        }
-    }
-}
-
 /// A builder for ELF object files.
 #[derive(Debug, Clone)]
 pub struct ElfBuilder<'data> {
