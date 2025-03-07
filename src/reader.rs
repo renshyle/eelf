@@ -39,9 +39,9 @@ use super::{
 
 /// Reads data specified in the ELF specification from an ELF file.
 ///
-/// Most data is read lazily; the objects themselves do not store the data but only act as readers. The reader can
-/// dynamically read both 32-bit and 64-bit, and big endian and little endian ELF files, and thus the return values in
-/// several functions are wider than required for 32-bit files.
+/// Most data is read lazily; the objects themselves do not store the data but only act as readers.
+/// The reader can dynamically read both 32-bit and 64-bit, and big endian and little endian ELF
+/// files, and thus the return values in several functions are wider than required for 32-bit files.
 #[derive(Debug, Clone)]
 pub struct ElfReader<'data> {
     bytes: &'data [u8],
@@ -50,9 +50,9 @@ pub struct ElfReader<'data> {
 }
 
 impl<'reader, 'data> ElfReader<'data> {
-    /// Creates a new [`ElfReader`] object from a slice of bytes, or an error if the bytes colud not be recognized as a
-    /// valid ELF file. Does not do a full validation of the file, and the function may return [`Result::Ok`] with an
-    /// invalid ELF file.
+    /// Creates a new [`ElfReader`] object from a slice of bytes, or an error if the bytes could not
+    /// be recognized as a valid ELF file. Does not do a full validation of the file, and the
+    /// function may return [`Result::Ok`] with an invalid ELF file.
     pub fn new(bytes: &'data [u8]) -> Result<Self, ParseError> {
         if !bytes.starts_with(ELF_MAGIC) {
             return Err(ParseError::InvalidHeader);
@@ -100,52 +100,55 @@ impl<'reader, 'data> ElfReader<'data> {
         self.bytes
     }
 
-    /// Reads a [`u64`] at position `index` in the ELF file.
+    /// Reads a [`u8`] at position `index` in the ELF file.
     pub fn read_u8(&self, index: usize) -> Option<u8> {
         self.bytes.get(index).copied()
     }
 
-    /// Reads a [`u16`] at position `index` in the ELF file using the endianness specified in the header.
+    /// Reads a [`u16`] at position `index` in the ELF file using the endianness specified in the
+    /// header.
     pub fn read_u16(&self, index: usize) -> Option<u16> {
         self.bytes
             .get(index..index + 2)
             .map(|bytes| self.endianness.u16_from_bytes(bytes.try_into().unwrap()))
     }
 
-    /// Reads a [`u32`] at position `index` in the ELF file using the endianness specified in the header.
+    /// Reads a [`u32`] at position `index` in the ELF file using the endianness specified in the
+    /// header.
     pub fn read_u32(&self, index: usize) -> Option<u32> {
         self.bytes
             .get(index..index + 4)
             .map(|bytes| self.endianness.u32_from_bytes(bytes.try_into().unwrap()))
     }
 
-    /// Reads a [`u64`] at position `index` in the ELF file using the endianness specified in the header.
+    /// Reads a [`u64`] at position `index` in the ELF file using the endianness specified in the
+    /// header.
     pub fn read_u64(&self, index: usize) -> Option<u64> {
         self.bytes
             .get(index..index + 8)
             .map(|bytes| self.endianness.u64_from_bytes(bytes.try_into().unwrap()))
     }
 
-    /// Returns a [`Header`] object, or an error if the header could not be read, such as if the data is shorter than an
-    /// ELF header's length.
+    /// Returns a [`Header`] object, or an error if the header could not be read, such as if the
+    /// data is shorter than an ELF header's length.
     pub fn header(&'reader self) -> Result<Header<'reader, 'data>, ParseError> {
         Header::new(self)
     }
 
-    /// Returns a [`Segments`] object that can be used to access the segments in the ELF file, or an error if the data
-    /// could not be read.
+    /// Returns a [`Segments`] object that can be used to access the segments in the ELF file, or an
+    /// error if the data could not be read.
     pub fn segments(&'reader self) -> Result<Segments<'reader, 'data>, ParseError> {
         Segments::new(self)
     }
 
-    /// Returns a [`Sections`] object that can be use do access the sections in the ELF file, or an error if the data
-    /// could not be read.
+    /// Returns a [`Sections`] object that can be use do access the sections in the ELF file, or an
+    /// error if the data could not be read.
     pub fn sections(&'reader self) -> Result<Sections<'reader, 'data>, ParseError> {
         Sections::new(self)
     }
 
-    /// Returns a [`Strings`] object based on the header's `e_shstrndx` value, or an error if the section could not be
-    /// read.
+    /// Returns a [`Strings`] object based on the header's `e_shstrndx` value, or an error if the
+    /// section could not be read.
     pub fn strings(&self) -> Result<Strings<'data>, ParseError> {
         Strings::new(self)
     }
@@ -176,7 +179,8 @@ impl<'reader, 'data> Header<'reader, 'data> {
         self.elf.bytes()[..EI_NIDENT].try_into().unwrap()
     }
 
-    /// The version of the ELF file as specified in the identification bytes. `ei_version` in the specification.
+    /// The version of the ELF file as specified in the identification bytes. `ei_version` in the
+    /// specification.
     pub fn ei_version(&self) -> u8 {
         self.ident()[EI_VERSION]
     }
@@ -223,7 +227,8 @@ impl<'reader, 'data> Header<'reader, 'data> {
         }
     }
 
-    /// The offset at which the program headers are located in the ELF file. `e_phoff` in the specification.
+    /// The offset at which the program headers are located in the ELF file. `e_phoff` in the
+    /// specification.
     ///
     /// 32 bits for 32-bit ELF files.
     pub fn phoff(&self) -> u64 {
@@ -234,7 +239,8 @@ impl<'reader, 'data> Header<'reader, 'data> {
         }
     }
 
-    /// The offset at which the section headers are located in the ELF file. `e_shoff` in the specification.
+    /// The offset at which the section headers are located in the ELF file. `e_shoff` in the
+    /// specification.
     ///
     /// 32 bits for 32-bit ELF files.
     pub fn shoff(&self) -> u64 {
@@ -281,7 +287,7 @@ impl<'reader, 'data> Header<'reader, 'data> {
         }
     }
 
-    /// The size of a sectin header. `e_shentsize` in the specification.
+    /// The size of a section header. `e_shentsize` in the specification.
     pub fn shentsize(&self) -> u16 {
         if self.elf.is_64bit() {
             self.elf.read_u16(58).unwrap()
@@ -329,15 +335,16 @@ impl<'data> Strings<'data> {
         })
     }
 
-    /// Reads a UTF-8 string from the string table using the index specified. If a zero-terminated string of bytes at
-    /// the specified address could not be found, `None` is returned. If one was found but could not be parsed as UTF-8,
-    /// `Some(Err())` is returned.
+    /// Reads a UTF-8 string from the string table using the index specified. If a zero-terminated
+    /// string of bytes at the specified address could not be found, `None` is returned. If one was
+    /// found but could not be parsed as UTF-8, `Some(Err())` is returned.
     pub fn get_str(&self, index: u64) -> Option<Result<&'data str, Utf8Error>> {
         self.get_cstr(index).map(CStr::to_str)
     }
 
-    /// Reads a [`CStr`] from the string table using the index specified. If a zero-terminated string of bytes at the
-    /// specified address could not be found, `None` is returned. The string must not be valid UTF-8.
+    /// Reads a [`CStr`] from the string table using the index specified. If a zero-terminated
+    /// string of bytes at the specified address could not be found, `None` is returned. The string
+    /// does not have to be valid UTF-8.
     pub fn get_cstr(&self, index: u64) -> Option<&'data CStr> {
         let bytes = self.data.get(usize::try_from(index).unwrap()..)?;
 
@@ -466,8 +473,8 @@ impl<'data> Section<'_, 'data> {
             .map_or(ElfValue::Unknown(value), ElfValue::Known)
     }
 
-    /// The address the section will be located at during execution, or 0 if the data isn't loaded. `sh_addr` in the
-    /// specification.
+    /// The address the section will be located at during execution, or 0 if the data isn't loaded.
+    /// `sh_addr` in the specification.
     pub fn addr(&self) -> u64 {
         if self.elf.is_64bit() {
             self.read_u64(16)
@@ -476,7 +483,8 @@ impl<'data> Section<'_, 'data> {
         }
     }
 
-    /// The offset at which the section's data is located in the ELF file. `sh_offset` in the specification.
+    /// The offset at which the section's data is located in the ELF file. `sh_offset` in the
+    /// specification.
     pub fn offset(&self) -> u64 {
         if self.elf.is_64bit() {
             self.read_u64(24)
@@ -503,7 +511,7 @@ impl<'data> Section<'_, 'data> {
         }
     }
 
-    /// Section type-dependent data. `sh_infa` in the specification.
+    /// Section type-dependent data. `sh_info` in the specification.
     pub fn info(&self) -> u32 {
         if self.elf.is_64bit() {
             self.read_u32(44)
@@ -512,8 +520,8 @@ impl<'data> Section<'_, 'data> {
         }
     }
 
-    /// The required alignment of the section's address; a power of two or 0 for no alignment requirement. `sh_addralign` in the
-    /// specification.
+    /// The required alignment of the section's address; a power of two or 0 for no alignment
+    /// requirement. `sh_addralign` in the specification.
     pub fn addralign(&self) -> u64 {
         if self.elf.is_64bit() {
             self.read_u64(48)
@@ -548,7 +556,7 @@ impl<'data> Section<'_, 'data> {
     }
 }
 
-/// Parses the program header tabel of an ELF file.
+/// Parses the program header table of an ELF file.
 #[derive(Debug, Clone)]
 pub struct Segments<'reader, 'data> {
     elf: &'reader ElfReader<'data>,
@@ -581,7 +589,8 @@ impl<'reader, 'data> Segments<'reader, 'data> {
         })
     }
 
-    /// Returns a [`Segment`] corresponding to the given index, or None if the index is out of bounds.
+    /// Returns a [`Segment`] corresponding to the given index, or None if the index is out of
+    /// bounds.
     pub fn get(&self, index: usize) -> Option<Segment<'reader, 'data>> {
         if index >= self.phnum {
             return None;
@@ -649,9 +658,9 @@ impl<'data> Segment<'_, 'data> {
         SegmentKind::from_u32(value).map_or(ElfValue::Unknown(value), ElfValue::Known)
     }
 
-    /// The offset at which the segment's data is located in the ELF file. This, in conjuction with [`Segment::filesz`],
-    /// can be used to get a `&[u8]` to the data, but the data can be accessed easiest using [`Segment::data`].
-    /// `p_offset` in the specification.
+    /// The offset at which the segment's data is located in the ELF file. This, in conjuction with
+    /// [`Segment::filesz`], can be used to get a `&'data [u8]` to the data, but the data can be
+    /// accessed easiest using [`Segment::data`]. `p_offset` in the specification.
     pub fn offset(&self) -> u64 {
         if self.elf.is_64bit() {
             self.read_u64(8)
@@ -660,7 +669,8 @@ impl<'data> Segment<'_, 'data> {
         }
     }
 
-    /// The virtual address which the segment should be loaded at during execution. `p_vaddr` in the specification.
+    /// The virtual address which the segment should be loaded at during execution. `p_vaddr` in the
+    /// specification.
     pub fn vaddr(&self) -> u64 {
         if self.elf.is_64bit() {
             self.read_u64(16)
@@ -669,7 +679,8 @@ impl<'data> Segment<'_, 'data> {
         }
     }
 
-    /// The physical address which the segment should be loaded at during execution. `p_paddr` in the specification.
+    /// The physical address which the segment should be loaded at during execution. `p_paddr` in
+    /// the specification.
     pub fn paddr(&self) -> u64 {
         if self.elf.is_64bit() {
             self.read_u64(24)
@@ -678,7 +689,8 @@ impl<'data> Segment<'_, 'data> {
         }
     }
 
-    /// The number of bytes stored in the ELF file starting at [`Segment::offset`]. `p_filesz` in the specification.
+    /// The number of bytes stored in the ELF file starting at [`Segment::offset`]. `p_filesz` in
+    /// the specification.
     pub fn filesz(&self) -> u64 {
         if self.elf.is_64bit() {
             self.read_u64(32)
@@ -687,7 +699,8 @@ impl<'data> Segment<'_, 'data> {
         }
     }
 
-    /// The number of bytes the segment occupies in memory during execution. `p_memsz` in the specification.
+    /// The number of bytes the segment occupies in memory during execution. `p_memsz` in the
+    /// specification.
     pub fn memsz(&self) -> u64 {
         if self.elf.is_64bit() {
             self.read_u64(40)
@@ -707,8 +720,8 @@ impl<'data> Segment<'_, 'data> {
         FlagSet::new(value).map_or(ElfValue::Unknown(value), ElfValue::Known)
     }
 
-    /// The required aligment of the virtual and physical address the segment is loaded at during execution. `p_align`
-    /// in the specification.
+    /// The required alignment of the virtual and physical address the segment is loaded at during
+    /// execution. `p_align` in the specification.
     pub fn align(&self) -> u64 {
         if self.elf.is_64bit() {
             self.read_u64(48)
@@ -717,8 +730,8 @@ impl<'data> Segment<'_, 'data> {
         }
     }
 
-    /// Returns a reference to the segment's bytes stored in the ELF file, as dictated by [`Segment::offset`] and
-    /// [`Segment::filesz`].
+    /// Returns a reference to the segment's bytes stored in the ELF file, as dictated by
+    /// [`Segment::offset`] and [`Segment::filesz`].
     pub fn data(&self) -> Result<&'data [u8], ParseError> {
         if self.filesz() == 0 {
             return Ok(&[]);
@@ -738,14 +751,15 @@ impl<'data> Segment<'_, 'data> {
 /// Represents the value of a field defined in the ELF specification.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ElfValue<K, U> {
-    /// If the field value was parsed successfully, `Known` contains the parsed representation of the data.
+    /// If the field value was parsed successfully, `Known` contains the parsed representation of
+    /// the data.
     Known(K),
     /// If the field was parsed unsuccessfully, `Unknown` contains the value of the field.
     Unknown(U),
 }
 
 impl<K, U> ElfValue<K, U> {
-    /// Returns true the variant is [`ElfValue::Known`].
+    /// Returns true if the variant is [`ElfValue::Known`].
     pub fn is_known(&self) -> bool {
         match self {
             ElfValue::Known(_) => true,
@@ -753,7 +767,7 @@ impl<K, U> ElfValue<K, U> {
         }
     }
 
-    /// Returns true the variant is [`ElfValue::Unknown`].
+    /// Returns true if the variant is [`ElfValue::Unknown`].
     pub fn is_unknown(&self) -> bool {
         match self {
             ElfValue::Known(_) => false,
@@ -798,7 +812,7 @@ pub enum ParseError {
     /// The ELF header was invalid
     #[error("invalid header")]
     InvalidHeader,
-    /// A field in the ELF file had an invalid value
+    /// A field in the ELF file had an invalid value. The string contains the name of the field.
     #[error("invalid value in field {0}")]
     InvalidValue(&'static str),
     /// Data was shorter than expected

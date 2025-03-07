@@ -87,7 +87,7 @@ impl<'data> ElfBuilder<'data> {
         }
     }
 
-    /// Builds the ELF file and consumes the builder.
+    /// Builds the ELF file, consuming the builder.
     pub fn build<W: Write>(self, mut target: W) -> std::io::Result<()> {
         let mut builder = self;
         let endianness = builder.endianness;
@@ -174,7 +174,8 @@ impl<'data> ElfBuilder<'data> {
                 });
             });
 
-        builder.add_string(".strtab"); // need to add the string before building the string table bytes
+        // need to add the string before building the string table bytes
+        builder.add_string(".strtab");
 
         let mut string_table = Vec::new();
 
@@ -217,13 +218,14 @@ impl<'data> ElfBuilder<'data> {
         Ok(())
     }
 
-    /// Adds a section to the section table and the data to the ELF file. The name is added to the string table. Returns
-    /// the index at which the section was added.
+    /// Adds a section to the section table and the data to the ELF file. Returns the index at which
+    /// the section was added.
     ///
     /// # Panics
     ///
     /// Panics, if
-    /// * the virtual address, entry size, or alignment is > [`u32::MAX`] and the ELF file is 32-bit, or
+    /// * the virtual address, entry size, or alignment is greater than [`u32::MAX`] and the ELF
+    ///   file is 32-bit, or
     /// * the name field in the section is invalid.
     pub fn add_section(&mut self, section: Section<'data>) -> usize {
         if !self.is_64bit {
@@ -238,7 +240,14 @@ impl<'data> ElfBuilder<'data> {
         self.sections.len() - 1
     }
 
-    /// Adds a segment entry into the program header. The segment type may not be [`SegmentKind::Phdr`].
+    /// Adds a segment entry into the program header. The segment type must not be
+    /// [`SegmentKind::Phdr`].
+    ///
+    /// # Panics
+    ///
+    /// Panics, if
+    /// * the segment type is [`SegmentKind::Phdr`], or
+    /// * memsz is less than filesz.
     pub fn add_segment(&mut self, segment: Segment) {
         assert!(segment.memsz >= segment.filesz);
         assert!(segment.kind != SegmentKind::Phdr);
@@ -266,12 +275,12 @@ impl<'data> ElfBuilder<'data> {
         offset
     }
 
-    /// Adds a symbol to the symbol table. The name is added to the string table. Returns the index of the symbol in the
-    /// symbol table.
+    /// Adds a symbol to the symbol table. The name is added to the string table. Returns the index
+    /// of the symbol in the symbol table.
     ///
     /// # Panics
     ///
-    /// Panics if the value is > [`u32::MAX`] and the ELF file is 32-bit.
+    /// Panics if the value is greater than [`u32::MAX`] and the ELF file is 32-bit.
     pub fn add_symbol(
         &mut self,
         name: impl Into<String> + AsRef<str>,
@@ -297,8 +306,8 @@ impl<'data> ElfBuilder<'data> {
         self.symbols.len() - 1
     }
 
-    /// Finds the index of a section in the section table by index. If it doesn't exist, [`None`]
-    /// is returned.
+    /// Finds the index of a section in the section table by name. If it doesn't exist, [`None`] is
+    /// returned.
     pub fn find_section(&self, name: &str) -> Option<usize> {
         let name_index = self.find_string(name)?;
 
@@ -371,7 +380,7 @@ impl<'data> ElfBuilder<'data> {
     ///
     /// # Panics
     ///
-    /// Panics if the entrypoint > [`u32::MAX`] for 32-bit files.
+    /// Panics if the entrypoint is greater than [`u32::MAX`] for 32-bit files.
     pub fn set_entrypoint(&mut self, entrypoint: u64) {
         if !self.is_64bit {
             assert!(entrypoint <= u32::MAX.into());

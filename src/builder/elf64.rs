@@ -46,11 +46,11 @@ pub(super) fn write_header<W: Write>(builder: &ElfBuilder, mut target: W) -> std
     )?; // section header table offset
     target.write_all(&[0, 0, 0, 0])?; // empty flags
     target.write_all(&endianness.u16_to_bytes(ELF64_HEADER_SIZE))?;
-    target.write_all(&endianness.u16_to_bytes(ELF64_PROGRAM_HEADER_SIZE))?; // program header entry size
-    target.write_all(&endianness.u16_to_bytes(builder.segments.len().try_into().unwrap()))?; // program header entry count
+    target.write_all(&endianness.u16_to_bytes(ELF64_PROGRAM_HEADER_SIZE))?;
+    target.write_all(&endianness.u16_to_bytes(builder.segments.len().try_into().unwrap()))?;
     target.write_all(&endianness.u16_to_bytes(ELF64_SECTION_HEADER_SIZE))?;
-    target.write_all(&endianness.u16_to_bytes(builder.sections.len().try_into().unwrap()))?; // section header count
-    target.write_all(&endianness.u16_to_bytes(u16::try_from(string_table_index).unwrap()))?; // string table index
+    target.write_all(&endianness.u16_to_bytes(builder.sections.len().try_into().unwrap()))?;
+    target.write_all(&endianness.u16_to_bytes(u16::try_from(string_table_index).unwrap()))?;
 
     Ok(())
 }
