@@ -195,15 +195,15 @@ impl<'data> ElfBuilder<'data> {
         });
 
         if builder.is_64bit {
-            elf64::write_header(&mut builder, &mut target)?;
-            elf64::write_phdrs(&mut builder, &mut target)?;
+            elf64::write_header(&builder, &mut target)?;
+            elf64::write_phdrs(&builder, &mut target)?;
             builder.write_sections(&mut target)?;
-            elf64::write_section_headers(&mut builder, &mut target)?;
+            elf64::write_section_headers(&builder, &mut target)?;
         } else {
-            elf32::write_header(&mut builder, &mut target)?;
-            elf32::write_phdrs(&mut builder, &mut target)?;
+            elf32::write_header(&builder, &mut target)?;
+            elf32::write_phdrs(&builder, &mut target)?;
             builder.write_sections(&mut target)?;
-            elf32::write_section_headers(&mut builder, &mut target)?;
+            elf32::write_section_headers(&builder, &mut target)?;
         }
 
         Ok(())
