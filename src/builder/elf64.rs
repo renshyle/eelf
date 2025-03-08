@@ -113,6 +113,7 @@ pub(super) fn write_section_headers<W: Write>(
                 u32::try_from(builder.find_section(".strtab").unwrap()).unwrap()
             }
             SectionKind::Rela => u32::try_from(builder.find_section(".symtab").unwrap()).unwrap(),
+            SectionKind::Rel => u32::try_from(builder.find_section(".symtab").unwrap()).unwrap(),
             _ => 0,
         };
 

@@ -139,6 +139,8 @@ impl<'data> ElfBuilder<'data> {
                     relocation_sections.push((
                         table.target_section,
                         table.name,
+                        SectionKind::Rela,
+                        if builder.is_64bit { 24 } else { 12 },
                         Cow::Owned(relocation_table),
                     ));
                 }
@@ -148,6 +150,8 @@ impl<'data> ElfBuilder<'data> {
                     relocation_sections.push((
                         table.target_section,
                         table.name,
+                        SectionKind::Rel,
+                        if builder.is_64bit { 16 } else { 8 },
                         Cow::Owned(relocation_table),
                     ));
                 }
@@ -156,14 +160,14 @@ impl<'data> ElfBuilder<'data> {
 
         relocation_sections
             .into_iter()
-            .for_each(|(index, name, data)| {
+            .for_each(|(index, name, kind, entsize, data)| {
                 builder.add_section(Section {
                     name,
                     data,
-                    kind: SectionKind::Rela,
+                    kind,
                     flags: Default::default(),
                     vaddr: 0,
-                    entsize: if builder.is_64bit { 24 } else { 12 },
+                    entsize,
                     alignment: 0,
                     info: index.try_into().unwrap(),
                 });
