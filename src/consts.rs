@@ -1,5 +1,6 @@
 use flagset::flags;
 use num_derive::{FromPrimitive, ToPrimitive};
+use num_traits::ToPrimitive;
 use phf::phf_map;
 
 pub(crate) const ELF_MAGIC: &[u8] = &[0x7f, b'E', b'L', b'F'];
@@ -638,17 +639,14 @@ pub enum MachineKind {
     Alpha = 0x9026,
 }
 
-/// A map of machine IDs to human-readable names. A machine ID is the numerical value of a
-/// [`MachineKind`] variant.
-///
-/// # Examples
-///
-/// ```
-/// use num_traits::cast::ToPrimitive;
-/// let x86_64 = eelf::MachineKind::X86_64;
-/// assert_eq!(eelf::MACHINE_NAMES.get(&x86_64.to_u16().unwrap()), Some(&"AMD x86-64 architecture"));
-/// ```
-pub static MACHINE_NAMES: phf::Map<u16, &'static str> = phf_map! {
+impl MachineKind {
+    /// Returns the human-readable name of the machine
+    pub fn name(&self) -> &'static str {
+        MACHINE_NAMES.get(&self.to_u16().unwrap()).unwrap()
+    }
+}
+
+static MACHINE_NAMES: phf::Map<u16, &'static str> = phf_map! {
     0u16 => "No machine",
     1u16 => "AT&T WE 32100",
     2u16 => "SUN SPARC",

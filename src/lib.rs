@@ -23,7 +23,7 @@ pub use flagset;
 pub use builder::ElfBuilder;
 pub use consts::{
     ElfKind, Endianness, MachineKind, OsAbi, SectionFlag, SectionKind, SegmentFlag, SegmentKind,
-    SymbolKind, MACHINE_NAMES,
+    SymbolKind,
 };
 #[doc(inline)]
 pub use reader::{ElfReader, ParseError};

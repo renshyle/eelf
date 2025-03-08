@@ -22,7 +22,15 @@ fn hello_world() {
     assert_eq!(header.osabi(), ElfValue::Known(OsAbi::None));
     assert_eq!(header.abiversion(), 0);
     assert_eq!(header.kind(), ElfValue::Known(ElfKind::None));
-    assert_eq!(header.machine(), ElfValue::Known(MachineKind::X86_64));
+
+    let machine = header.machine();
+    assert_eq!(machine, ElfValue::Known(MachineKind::X86_64));
+
+    match machine {
+        ElfValue::Known(machine) => assert_eq!(machine.name(), "AMD x86-64 architecture"),
+        _ => unreachable!(),
+    }
+
     assert_eq!(header.version(), 1);
     assert_eq!(header.entry(), 0x12345678);
     assert_eq!(header.phoff(), 64);
