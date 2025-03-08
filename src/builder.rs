@@ -113,17 +113,21 @@ impl<'data> ElfBuilder<'data> {
             }
         }
 
-        let name = builder.add_string(".symtab");
-        builder.add_section(Section {
-            name,
-            data: Cow::Borrowed(&symbol_table),
-            kind: SectionKind::SymbolTable,
-            flags: Default::default(),
-            vaddr: 0,
-            entsize: if builder.is_64bit { 24 } else { 16 },
-            alignment: 0,
-            info: builder.symbols.len().try_into().unwrap(),
-        });
+        // the first entry in the symbol table is the null entry, so add the table only if there are
+        // any real entries
+        if builder.symbols.len() > 1 {
+            let name = builder.add_string(".symtab");
+            builder.add_section(Section {
+                name,
+                data: Cow::Borrowed(&symbol_table),
+                kind: SectionKind::SymbolTable,
+                flags: Default::default(),
+                vaddr: 0,
+                entsize: if builder.is_64bit { 24 } else { 16 },
+                alignment: 0,
+                info: builder.symbols.len().try_into().unwrap(),
+            });
+        }
 
         let mut relocation_sections = Vec::new();
 
