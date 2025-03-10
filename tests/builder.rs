@@ -54,22 +54,20 @@ fn nonsense_build() {
         align: 0x4000,
     });
 
-    builder.add_symbol(
-        "local_symbol",
-        9,
-        32,
-        false,
-        SymbolKind::Object,
-        section.try_into().unwrap(),
-    );
-    builder.add_symbol(
-        "_____staaaaaaart",
-        4,
-        16,
-        true,
-        SymbolKind::Func,
-        section.try_into().unwrap(),
-    );
+    let symbol_table = builder.symbol_table();
+    builder.add_segment(Segment {
+        section: symbol_table,
+        kind: SegmentKind::Load,
+        vaddr: 0x1122334433443322,
+        paddr: 0x4232fab213a9923a,
+        filesz: 16,
+        memsz: 17,
+        flags: SegmentFlag::Execute | SegmentFlag::Write,
+        align: 0x12,
+    });
+
+    builder.add_symbol("local_symbol", 9, 32, false, SymbolKind::Object, section);
+    builder.add_symbol("_____staaaaaaart", 4, 16, true, SymbolKind::Func, section);
 
     let mut rel_table = builder.create_rel_table(".rel.section", section);
     rel_table.add(RelEntry {

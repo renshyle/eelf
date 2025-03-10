@@ -3,7 +3,7 @@
 //! The main type is [`ElfBuilder`], which can be used to construct the ELF file and build it into
 //! bytes.
 
-use std::{borrow::Cow, io::Write};
+use std::{borrow::Cow, io::Write, num::TryFromIntError};
 
 use num_traits::ToPrimitive;
 
@@ -24,6 +24,22 @@ use super::{
 mod elf32;
 mod elf64;
 
+// The built ELF file's section headers look as follows:
+// ----------------
+// |   section 1  |
+// |     ...      |
+// |   section n  |
+// | symbol table |
+// | relocation 1 |
+// |     ...      |
+// | relocation n |
+// | string table |
+// ----------------
+//
+// Sections 1..=n are the ones added with ElfBuilder::add_section. A symbol table is included if
+// ElfBuilder::should_build_symbol_table() == true, which happens if the symbol table's ID has been
+// requested using ElfBuilder::symbol_table or if a symbol has been added to the symbol table.
+
 /// A builder for ELF object files.
 #[derive(Debug, Clone)]
 pub struct ElfBuilder<'data> {
@@ -37,6 +53,8 @@ pub struct ElfBuilder<'data> {
     machine: MachineKind,
     endianness: Endianness,
     is_64bit: bool,
+    /// Whether a symbol table, even an empty one, is required
+    symbol_table_needed: bool,
 }
 
 impl<'data> ElfBuilder<'data> {
@@ -50,7 +68,7 @@ impl<'data> ElfBuilder<'data> {
         Self {
             sections: vec![Section {
                 data: Cow::Borrowed(&[]),
-                name: 0,
+                name: StringId::empty(),
                 kind: SectionKind::Null,
                 flags: Default::default(),
                 info: 0,
@@ -60,12 +78,14 @@ impl<'data> ElfBuilder<'data> {
             }],
             strings: vec![String::new()],
             symbols: vec![Symbol {
-                name: 0,
+                name: StringId::empty(),
                 value: 0,
                 size: 0,
                 global: false,
                 kind: SymbolKind::NoType,
-                section: 0,
+                section: SectionId {
+                    inner: SectionIdInner::Id(0),
+                },
             }],
             relocations: Vec::new(),
             segments: Vec::new(),
@@ -74,6 +94,7 @@ impl<'data> ElfBuilder<'data> {
             machine,
             endianness,
             is_64bit,
+            symbol_table_needed: false,
         }
     }
 
@@ -91,7 +112,13 @@ impl<'data> ElfBuilder<'data> {
                 let info = symbol.kind.to_u8().unwrap() | if symbol.global { 16 } else { 0 };
                 symbol_table.push(info);
                 symbol_table.push(0); // other, always 0
-                symbol_table.extend_from_slice(&endianness.u16_to_bytes(symbol.section));
+                let section = match symbol.section {
+                    SectionId {
+                        inner: SectionIdInner::Id(id),
+                    } => id,
+                    _ => todo!(),
+                };
+                symbol_table.extend_from_slice(&endianness.u16_to_bytes(section));
 
                 symbol_table.extend_from_slice(&endianness.u64_to_bytes(symbol.value));
                 symbol_table.extend_from_slice(&endianness.u64_to_bytes(symbol.size));
@@ -109,13 +136,17 @@ impl<'data> ElfBuilder<'data> {
                 symbol_table.push(info);
                 symbol_table.push(0); // other, always 0
 
-                symbol_table.extend_from_slice(&endianness.u16_to_bytes(symbol.section));
+                let section = match symbol.section {
+                    SectionId {
+                        inner: SectionIdInner::Id(id),
+                    } => id,
+                    _ => todo!(),
+                };
+                symbol_table.extend_from_slice(&endianness.u16_to_bytes(section));
             }
         }
 
-        // the first entry in the symbol table is the null entry, so add the table only if there are
-        // any real entries
-        if builder.symbols.len() > 1 {
+        if builder.should_build_symbol_table() {
             let name = builder.add_string(".symtab");
             builder.add_section(Section {
                 name,
@@ -160,7 +191,7 @@ impl<'data> ElfBuilder<'data> {
 
         relocation_sections
             .into_iter()
-            .for_each(|(index, name, kind, entsize, data)| {
+            .for_each(|(section, name, kind, entsize, data)| {
                 builder.add_section(Section {
                     name,
                     data,
@@ -169,12 +200,17 @@ impl<'data> ElfBuilder<'data> {
                     vaddr: 0,
                     entsize,
                     alignment: 0,
-                    info: index.try_into().unwrap(),
+                    info: match section {
+                        SectionId {
+                            inner: SectionIdInner::Id(id),
+                        } => id.into(),
+                        _ => todo!(),
+                    },
                 });
             });
 
         // need to add the string before building the string table bytes
-        builder.add_string(".strtab");
+        let strtab_string = builder.add_string(".strtab");
 
         let mut string_table = Vec::new();
 
@@ -184,7 +220,7 @@ impl<'data> ElfBuilder<'data> {
         }
 
         builder.add_section(Section {
-            name: builder.find_string(".strtab").unwrap(),
+            name: strtab_string,
             data: Cow::Borrowed(&string_table),
             kind: SectionKind::StringTable,
             flags: Default::default(),
@@ -217,26 +253,55 @@ impl<'data> ElfBuilder<'data> {
         Ok(())
     }
 
+    fn should_build_symbol_table(&self) -> bool {
+        self.symbol_table_needed || self.symbols.len() > 1
+    }
+
+    /// Returns the index of the symbol table in the section headers. May only be used after all
+    /// sections, including the symbol table, relocations, and the string table have been built.
+    fn symbol_table_index(&self) -> u16 {
+        // -1 for the string table, another -1 for the symbol table
+        (self.sections.len() - self.relocations.len() - 2)
+            .try_into()
+            .unwrap()
+    }
+
+    /// Returns the index of the string table in the section headers. May only be used after all
+    /// sections, including the symbol table, relocations, and the string table have been built.
+    fn string_table_index(&self) -> u16 {
+        (self.sections.len() - 1).try_into().unwrap()
+    }
+
+    /// Returns the index of a section in the section headers. May only be used after all sections,
+    /// including the symbol table, relocations, and the string table have been built.
+    fn section_index(&self, section_id: SectionId) -> u16 {
+        let SectionId { inner: section_id } = section_id;
+
+        match section_id {
+            SectionIdInner::SymbolTable => self.symbol_table_index(),
+            SectionIdInner::StringTable => self.string_table_index(),
+            SectionIdInner::Id(id) => id,
+        }
+    }
+
     /// Adds a section to the section table and the data to the ELF file. Returns the index at which
     /// the section was added.
     ///
     /// # Panics
     ///
-    /// Panics, if
-    /// * the virtual address, entry size, or alignment is greater than [`u32::MAX`] and the ELF
-    ///   file is 32-bit, or
-    /// * the name field in the section is invalid.
-    pub fn add_section(&mut self, section: Section<'data>) -> usize {
+    /// Panics if the virtual address, entry size, or alignment is greater than [`u32::MAX`] and the
+    /// ELF file is 32-bit
+    pub fn add_section(&mut self, section: Section<'data>) -> SectionId {
         if !self.is_64bit {
             assert!(section.vaddr <= u32::MAX.into());
             assert!(section.entsize <= u32::MAX.into());
             assert!(section.alignment <= u32::MAX.into());
         }
 
-        assert!(section.name < self.strings.iter().map(|s| s.len() + 1).sum());
-
         self.sections.push(section);
-        self.sections.len() - 1
+        SectionId {
+            inner: SectionIdInner::Id((self.sections.len() - 1).try_into().unwrap()),
+        }
     }
 
     /// Adds a segment entry into the program header. The segment type must not be
@@ -255,7 +320,7 @@ impl<'data> ElfBuilder<'data> {
     }
 
     /// Adds a string to the string table if it doesn't exist already and returns its index.
-    pub fn add_string(&mut self, string: impl Into<String> + AsRef<str>) -> usize {
+    pub fn add_string(&mut self, string: impl Into<String> + AsRef<str>) -> StringId {
         let mut found = false;
         let mut offset = 0;
         for s in &self.strings {
@@ -271,7 +336,9 @@ impl<'data> ElfBuilder<'data> {
             self.strings.push(string.into());
         }
 
-        offset
+        StringId {
+            offset: offset.try_into().unwrap(),
+        }
     }
 
     /// Adds a symbol to the symbol table. The name is added to the string table. Returns the index
@@ -287,7 +354,7 @@ impl<'data> ElfBuilder<'data> {
         size: u64,
         global: bool,
         kind: SymbolKind,
-        section: u16,
+        section: SectionId,
     ) -> usize {
         let name_index = self.add_string(name);
 
@@ -323,7 +390,7 @@ impl<'data> ElfBuilder<'data> {
     pub fn create_rel_table(
         &mut self,
         name: impl Into<String> + AsRef<str>,
-        section: usize,
+        section: SectionId,
     ) -> RelTable {
         let name = self.add_string(name);
 
@@ -339,7 +406,7 @@ impl<'data> ElfBuilder<'data> {
     pub fn create_rela_table(
         &mut self,
         name: impl Into<String> + AsRef<str>,
-        section: usize,
+        section: SectionId,
     ) -> RelaTable {
         let name = self.add_string(name);
 
@@ -356,11 +423,13 @@ impl<'data> ElfBuilder<'data> {
     }
 
     /// Finds the index of a string in the string table. If it doesn't exist, [`None`] is returned.
-    pub fn find_string(&self, string: &str) -> Option<usize> {
+    pub fn find_string(&self, string: &str) -> Option<StringId> {
         let mut offset = 0;
         for s in &self.strings {
             if s == string {
-                return Some(offset);
+                return Some(StringId {
+                    offset: offset.try_into().unwrap(),
+                });
             }
 
             offset += s.len() + 1; // 1 for the null byte
@@ -390,6 +459,22 @@ impl<'data> ElfBuilder<'data> {
 
         self.entrypoint = entrypoint;
     }
+
+    /// Returns the section ID of the symbol table.
+    pub fn symbol_table(&mut self) -> SectionId {
+        self.symbol_table_needed = true;
+
+        SectionId {
+            inner: SectionIdInner::SymbolTable,
+        }
+    }
+
+    /// Returns the section ID of the string table.
+    pub fn string_table(&self) -> SectionId {
+        SectionId {
+            inner: SectionIdInner::StringTable,
+        }
+    }
 }
 
 /// A section in an ELF file
@@ -397,8 +482,8 @@ impl<'data> ElfBuilder<'data> {
 pub struct Section<'a> {
     /// The data the section contains.
     pub data: Cow<'a, [u8]>,
-    /// The name of the section, an index into the string table
-    pub name: usize,
+    /// The name of the section
+    pub name: StringId,
     /// The type of the section
     pub kind: SectionKind,
     /// Section flags
@@ -413,11 +498,51 @@ pub struct Section<'a> {
     pub alignment: u64,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SectionIdInner {
+    SymbolTable,
+    StringTable,
+    Id(u16),
+}
+
+/// Represents the ID of a section in an ELF file.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SectionId {
+    inner: SectionIdInner,
+}
+
+/// Represents the ID of a string in the string table of an ELF file.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StringId {
+    offset: u64,
+}
+
+impl StringId {
+    /// The string ID of an empty string in all ELF files.
+    pub fn empty() -> StringId {
+        StringId { offset: 0 }
+    }
+}
+
+impl From<StringId> for u64 {
+    fn from(val: StringId) -> Self {
+        val.offset
+    }
+}
+
+impl TryFrom<StringId> for u32 {
+    type Error = TryFromIntError;
+
+    fn try_from(val: StringId) -> Result<u32, TryFromIntError> {
+        val.offset.try_into()
+    }
+}
+
 /// A segment in the program header of an ELF file
 #[derive(Debug, Clone)]
 pub struct Segment {
     /// The index of the section the segment refers to
-    pub section: usize,
+    pub section: SectionId,
     /// The type of the segment
     pub kind: SegmentKind,
     /// The virtual address of the segment
@@ -446,8 +571,8 @@ pub enum RelocationTable {
 /// A table containing the Rela-type relocations for a section
 #[derive(Debug, Clone)]
 pub struct RelaTable {
-    name: usize,
-    target_section: usize,
+    name: StringId,
+    target_section: SectionId,
     relocations: Vec<RelaEntry>,
 }
 
@@ -490,8 +615,8 @@ impl RelaTable {
 /// A table containing the Rel-type relocations for a section
 #[derive(Debug, Clone)]
 pub struct RelTable {
-    name: usize,
-    target_section: usize,
+    name: StringId,
+    target_section: SectionId,
     relocations: Vec<RelEntry>,
 }
 
@@ -529,13 +654,12 @@ impl RelTable {
 
 #[derive(Debug, Clone)]
 struct Symbol {
-    /// An index into the string table
-    name: usize,
+    name: StringId,
     value: u64,
     size: u64,
     global: bool,
     kind: SymbolKind,
-    section: u16,
+    section: SectionId,
 }
 
 /// An `Elf_Rela`-type relocation entry

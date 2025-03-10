@@ -76,7 +76,10 @@ pub(super) fn write_phdrs<W: Write>(builder: &ElfBuilder, mut target: W) -> std:
         target.write_all(&endianness.u32_to_bytes(segment.kind.to_u32().unwrap()))?;
         target.write_all(&endianness.u32_to_bytes(segment.flags.bits()))?;
 
-        target.write_all(&endianness.u64_to_bytes(sections[segment.section].0))?;
+        target.write_all(
+            &endianness
+                .u64_to_bytes(sections[usize::from(builder.section_index(segment.section))].0),
+        )?;
         target.write_all(&endianness.u64_to_bytes(segment.vaddr))?;
         target.write_all(&endianness.u64_to_bytes(segment.paddr))?;
         target.write_all(&endianness.u64_to_bytes(segment.filesz))?;
