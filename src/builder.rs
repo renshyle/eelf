@@ -377,12 +377,15 @@ impl<'data> ElfBuilder<'data> {
 
     /// Finds the index of a section in the section table by name. If it doesn't exist, [`None`] is
     /// returned.
-    pub fn find_section(&self, name: &str) -> Option<usize> {
+    pub fn find_section(&self, name: &str) -> Option<SectionId> {
         let name_index = self.find_string(name)?;
 
         self.sections
             .iter()
             .position(|section| section.name == name_index)
+            .map(|pos| SectionId {
+                inner: SectionIdInner::Id(pos.try_into().unwrap()),
+            })
     }
 
     /// Creates a new Rel-type relocation table. The table is not added; it must be added with

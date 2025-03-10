@@ -111,11 +111,15 @@ pub(super) fn write_section_headers<W: Write>(
         target.write_all(&endianness.u32_to_bytes(section.data.len().try_into().unwrap()))?;
 
         let link = match section.kind {
-            SectionKind::SymbolTable => {
-                u32::try_from(builder.find_section(".strtab").unwrap()).unwrap()
-            }
-            SectionKind::Rela => u32::try_from(builder.find_section(".symtab").unwrap()).unwrap(),
-            SectionKind::Rel => u32::try_from(builder.find_section(".symtab").unwrap()).unwrap(),
+            SectionKind::SymbolTable => builder
+                .section_index(builder.find_section(".strtab").unwrap())
+                .into(),
+            SectionKind::Rela => builder
+                .section_index(builder.find_section(".symtab").unwrap())
+                .into(),
+            SectionKind::Rel => builder
+                .section_index(builder.find_section(".symtab").unwrap())
+                .into(),
             _ => 0,
         };
 
