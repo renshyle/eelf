@@ -355,7 +355,7 @@ impl<'data> ElfBuilder<'data> {
         global: bool,
         kind: SymbolKind,
         section: SectionId,
-    ) -> usize {
+    ) -> SymbolId {
         let name_index = self.add_string(name);
 
         if !self.is_64bit {
@@ -372,7 +372,9 @@ impl<'data> ElfBuilder<'data> {
             section,
         });
 
-        self.symbols.len() - 1
+        SymbolId {
+            index: (self.symbols.len() - 1).try_into().unwrap(),
+        }
     }
 
     /// Finds the index of a section in the section table by name. If it doesn't exist, [`None`] is
@@ -442,12 +444,15 @@ impl<'data> ElfBuilder<'data> {
     }
 
     /// Finds the index of a symbol in the symbol table. If it doesn't exist, [`None`] is returned.
-    pub fn find_symbol(&self, name: &str) -> Option<usize> {
+    pub fn find_symbol(&self, name: &str) -> Option<SymbolId> {
         let name_index = self.find_string(name)?;
 
         self.symbols
             .iter()
             .position(|symbol| symbol.name == name_index)
+            .map(|pos| SymbolId {
+                index: pos.try_into().unwrap(),
+            })
     }
 
     /// Sets the address the ELF file, if executable, will start executing at.
@@ -545,6 +550,18 @@ impl TryFrom<StringId> for u32 {
 
     fn try_from(val: StringId) -> Result<u32, TryFromIntError> {
         val.offset.try_into()
+    }
+}
+
+/// Represents the ID of a symbol in the symbol table of an ELF file.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SymbolId {
+    index: u64,
+}
+
+impl From<SymbolId> for u64 {
+    fn from(value: SymbolId) -> Self {
+        value.index
     }
 }
 
