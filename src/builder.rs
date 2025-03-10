@@ -463,6 +463,13 @@ impl<'data> ElfBuilder<'data> {
         self.entrypoint = entrypoint;
     }
 
+    /// Returns the section ID of the first section, the null section.
+    pub fn null_section(&self) -> SectionId {
+        SectionId {
+            inner: SectionIdInner::Id(0),
+        }
+    }
+
     /// Returns the section ID of the symbol table.
     pub fn symbol_table(&mut self) -> SectionId {
         self.symbol_table_needed = true;
