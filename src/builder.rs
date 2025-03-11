@@ -609,9 +609,11 @@ impl RelaTable {
         self.relocations.push(relocation);
     }
 
+    /// Converts the relocation table to ELF section bytes.
+    ///
     /// # Panics
     ///
-    /// Panics, if `is_64bit` == false and one of the relocation entries does not fit in 32 bits.
+    /// Panics if is_64bit is false and one of the relocation entries does not fit in 32 bits.
     fn to_bytes(&self, endianness: Endianness, is_64bit: bool) -> Vec<u8> {
         let mut relocation_table = Vec::new();
 
@@ -653,9 +655,11 @@ impl RelTable {
         self.relocations.push(relocation);
     }
 
+    /// Converts the relocation table to ELF section bytes.
+    ///
     /// # Panics
     ///
-    /// Panics, if is_64bit == false and one of the relocation entries does not fit in 32 bits.
+    /// Panics if is_64bit is false and one of the relocation entries does not fit in 32 bits.
     fn to_bytes(&self, endianness: Endianness, is_64bit: bool) -> Vec<u8> {
         let mut relocation_table = Vec::new();
 
