@@ -2,6 +2,10 @@
 //!
 //! The main type is [`ElfBuilder`], which can be used to construct the ELF file and build it into
 //! bytes.
+//!
+//! # Examples
+//!
+//! See [tests/builder.rs](https://github.com/renshyle/eelf/blob/main/tests/builder.rs).
 
 use std::{borrow::Cow, io::Write, num::TryFromIntError};
 
@@ -309,7 +313,7 @@ impl<'data> ElfBuilder<'data> {
     ///
     /// # Panics
     ///
-    /// Panics, if
+    /// Panics if
     /// * the segment type is [`SegmentKind::Phdr`], or
     /// * memsz is less than filesz.
     pub fn add_segment(&mut self, segment: Segment) {

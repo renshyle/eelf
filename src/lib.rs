@@ -9,7 +9,7 @@
 //!
 //! # Examples
 //!
-//! See [`reader`].
+//! See [`reader`] and [`builder`].
 
 #![warn(missing_docs)]
 
